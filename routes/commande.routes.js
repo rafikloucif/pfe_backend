@@ -1,5 +1,5 @@
 const express = require('express');
-const Commande = require('../models/Commande');
+const Commande = require('../models/commande');
 const Chauffeur = require('../models/chauffeur');
 const authClient = require('../middleware/authClient');
 const authFournisseur = require('../middleware/authFournisseur');

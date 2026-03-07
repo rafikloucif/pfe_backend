@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const Fournisseur = require('../models/Fournisseur');
+const Fournisseur = require('../models/fournisseur');
 const authFournisseur = require('../middleware/authFournisseur');
 
 const router = express.Router();

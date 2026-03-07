@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const Fournisseur = require('../models/Fournisseur');
+const Fournisseur = require('../models/fournisseur');
 
 module.exports = async (req, res, next) => {
   try {
