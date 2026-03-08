@@ -1,7 +1,7 @@
-equire('dotenv').config();
+require('dotenv').config();
 const helmet = require('helmet');
 const cors = require('cors');
-const rateLimit = require=('express-rate-limit');
+const rateLimit = require('express-rate-limit');
 const express = require('express');
 const connectDB = require('./config/db');
 const aiRoutes = require('./routes/ai.routes');
