@@ -3,13 +3,21 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Client = require('../models/client');
 const authClient = require('../middleware/authClient');
-
+const validator = require('validator');
 const router = express.Router();
 
 // REGISTER
 router.post('/register', async (req, res) => {
 
   const { nom, prenom, email, password, telephone, adresse } = req.body;
+
+  if (!validator.isEmail(email)) {
+  return res.status(400).json({ msg: "Invalid email" });
+}
+
+if (password.length < 6) {
+  return res.status(400).json({ msg: "Password must be at least 6 characters" });
+}
 
   const exist = await Client.findOne({ email });
   if (exist) return res.status(400).json({ msg: "Email already exists" });
