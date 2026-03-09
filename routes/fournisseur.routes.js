@@ -11,6 +11,10 @@ router.post('/register', async (req, res) => {
 
   const { nom, email, password, telephone } = req.body;
 
+  if (!email.endsWith("@gmail.com")) {
+  return res.status(400).json({ msg: "Only Gmail allowed" });
+}
+
 if (!nom || !email || !password || !telephone) {
   return res.status(400).json({ msg: "Tous les champs sont obligatoires" });
 }

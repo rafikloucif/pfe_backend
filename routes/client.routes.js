@@ -15,6 +15,10 @@ router.post('/register', async (req, res) => {
   return res.status(400).json({ msg: "Invalid email" });
 }
 
+if (!email.endsWith("@gmail.com")) {
+  return res.status(400).json({ msg: "Only Gmail allowed" });
+}
+ 
 if (password.length < 6) {
   return res.status(400).json({ msg: "Password must be at least 6 characters" });
 }
