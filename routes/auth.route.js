@@ -6,114 +6,141 @@ const User = require("../models/user");
 const validator = require("validator");
 
 
+// ─────────────────────────────────────────
 // REGISTER
-router.post("/register", async(req,res)=>{
+// ─────────────────────────────────────────
+router.post("/register", async (req, res) => {
 
- const {nom,prenom,telephone,email,password,adresse} = req.body;
+  try {
 
-if (!validator.isEmail(email)) {
-  return res.status(400).json({ msg: "Invalid email" });
-}
+    const { nom, prenom, telephone, email, password, adresse } = req.body;
 
- if (!email.endsWith("@gmail.com")) {
-  return res.status(400).json({ msg: "Only Gmail allowed" });
-}
+    if (!validator.isEmail(email)) {
+      return res.status(400).json({ msg: "Invalid email" });
+    }
 
-if (password.length < 6) {
-  return res.status(400).json({ msg: "Password must be at least 6 characters" });
-} 
+    if (!email.endsWith("@gmail.com")) {
+      return res.status(400).json({ msg: "Only Gmail allowed" });
+    }
 
- const userExists = await User.findOne({email});
+    if (password.length < 6) {
+      return res.status(400).json({ msg: "Password must be at least 6 characters" });
+    }
 
- if(userExists){
-  return res.status(400).json({
-   msg:"email already used"
-  });
- }
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({ msg: "Email already used" });
+    }
 
- const hashedPassword = await bcrypt.hash(password,10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
- const user = new User({
-  nom,
-  prenom,
-  telephone,
-  email,
-  password:hashedPassword,
-  adresse
- });
+    const user = new User({
+      nom,
+      prenom,
+      telephone,
+      email,
+      password: hashedPassword,
+      adresse
+    });
 
- await user.save();
+    await user.save();
 
- res.json({
-  msg:"user created",
-  userId:user._id
- });
+    res.json({
+      msg: "user created",
+      userId: user._id
+    });
 
-});
-
-
-// LOGIN
-router.post("/login", async(req,res)=>{
-
- const {email,password} = req.body;
-
- 
-  if (!email || !password) {
-    return res.status(400).json({ msg: "Email et password obligatoires" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
   }
 
- const user = await User.findOne({email});
+});
 
- if(!user){
-  return res.status(404).json({
-   msg:"user not found"
-  });
- }
 
- const match = await bcrypt.compare(password,user.password);
+// ─────────────────────────────────────────
+// LOGIN
+// ─────────────────────────────────────────
+router.post("/login", async (req, res) => {
 
- if(!match){
-  return res.status(401).json({
-   msg:"wrong password"
-  });
- }
+  try {
 
-   const token = jwt.sign({ id: client._id }, process.env.JWT_SECRET); 
- 
- res.json({
-   message: `Hello ${user.nom}`,
-   token,
-   user: {
-     id: user._id,
-     nom: user.nom,
-     email: user.email
-   }
- });
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ msg: "Email et password obligatoires" });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ msg: "User not found" });
+    }
+
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      return res.status(401).json({ msg: "Wrong password" });
+    }
+
+    // ✅ Fixed: was "client._id" — now correctly "user._id"
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+
+    res.json({
+      message: `Hello ${user.nom}`,
+      token,
+      user: {
+        id: user._id,
+        nom: user.nom,
+        email: user.email,
+        role: user.role
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
+  }
 
 });
 
 
+// ─────────────────────────────────────────
 // CHOOSE ROLE (once only)
-router.post("/choose-role", async(req,res)=>{
+// ─────────────────────────────────────────
+router.post("/choose-role", async (req, res) => {
 
- const {userId,role} = req.body;
+  try {
 
- const user = await User.findById(userId);
+    const { userId, role } = req.body;
 
- if(user.role){
-  return res.status(400).json({
-   msg:"role already chosen"
-  });
- }
+    if (!userId || !role) {
+      return res.status(400).json({ msg: "userId and role are required" });
+    }
 
- user.role = role;
+    if (!["client", "fournisseur"].includes(role)) {
+      return res.status(400).json({ msg: "Role must be client or fournisseur" });
+    }
 
- await user.save();
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ msg: "User not found" });
+    }
 
- res.json({
-  msg:"role saved",
-  role:user.role
- });
+    if (user.role) {
+      return res.status(400).json({ msg: "role already chosen" });
+    }
+
+    user.role = role;
+    await user.save();
+
+    res.json({
+      msg: "role saved",
+      role: user.role
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
+  }
 
 });
 
