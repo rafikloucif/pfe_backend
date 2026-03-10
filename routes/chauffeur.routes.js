@@ -1,11 +1,11 @@
 const express = require('express');
 const Chauffeur = require('../models/chauffeur');
-const authFournisseur = require('../middleware/authFournisseur');
-
+const auth = require('../middleware/auth');
+const role = require('../middleware/role');
 const router = express.Router();
 
 // ADD CHAUFFEUR
-router.post('/add', authFournisseur, async (req, res) => {
+router.post('/add', auth, role("fournisseur"), async (req, res) => {
 
 const { nom, telephone, capaciteCamion } = req.body;
 
@@ -17,7 +17,7 @@ if (capaciteCamion <= 0) {
   return res.status(400).json({ msg: "Capacité invalide" });
 }
 
-  const chauffeur = new Chauffeur({
+  const chauffeur = new chauffeur({
     nom: req.body.nom,
     telephone: req.body.telephone,
     capaciteCamion: req.body.capaciteCamion,
@@ -29,9 +29,9 @@ if (capaciteCamion <= 0) {
 });
 
 // GET MY CHAUFFEURS
-router.get('/my', authFournisseur, async (req, res) => {
+router.get('/my', auth, role("fournisseur"), async (req, res) => {
 
-  const chauffeurs = await Chauffeur.find({ fournisseur: req.user });
+  const chauffeurs = await chauffeur.find({ fournisseur: req.user });
   res.json(chauffeurs);
 
 });

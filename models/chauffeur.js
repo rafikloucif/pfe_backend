@@ -24,10 +24,10 @@ const chauffeurSchema = new mongoose.Schema({
 
   fournisseur: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Fournisseur',
+    ref: 'fournisseur',
     required: true
   }
 
 }, { timestamps: true });
 
-module.exports = mongoose.model('Chauffeur', chauffeurSchema);
+module.exports = mongoose.model('chauffeur', chauffeurSchema);

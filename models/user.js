@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const clientSchema = new mongoose.Schema({
+const userSchema = new mongoose.Schema({
   nom: {
     type: String,
     required: true
@@ -28,8 +28,17 @@ const clientSchema = new mongoose.Schema({
    adresse: {
     type: String,
     required: true
-  }
+  },
+     role: {
+    type: String,
+    enum:["client","fournisseur"],
+    default:null
+  },
+     fournisseurInfo: {
+    quantiteEau: Number,
+    wilayas: [String]
+  },
  
 });
 
-module.exports = mongoose.models.client  ||  mongoose.model('client', clientSchema);
+module.exports = mongoose.models.user  ||  mongoose.model('user', userSchema);

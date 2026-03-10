@@ -1,13 +1,13 @@
 const express = require('express');
 const Commande = require('../models/commande');
 const Chauffeur = require('../models/chauffeur');
-const authClient = require('../middleware/authClient');
-const authFournisseur = require('../middleware/authFournisseur');
+const auth = require('../middleware/auth');
+const role = require('../middleware/role');
 
 const router = express.Router();
 
 // CLIENT ADD COMMANDE
-router.post('/add', authClient, async (req, res) => {
+router.post('/add', auth, role("client"), async (req, res) => {   
 
 const { capacite, prix } = req.body;
 
@@ -19,9 +19,9 @@ if (capacite <= 0 || prix <= 0) {
   return res.status(400).json({ msg: "Valeurs invalides" });
 }
   const commande = new Commande({
-    client: req.user,
-    capacite: req.body.capacite,
-    prix: req.body.prix
+    client: req.user.id,
+    capacite,
+    prix
   });
 
   await commande.save();
@@ -29,14 +29,14 @@ if (capacite <= 0 || prix <= 0) {
 });
 
 // FOURNISSEUR VOIR COMMANDES EN ATTENTE
-router.get('/pending', authFournisseur, async (req, res) => {
+router.get('/pending', auth, role("fournisseur"), async (req, res) => {
 
   const commandes = await Commande.find({ status: "en attente" });
   res.json(commandes);
 });
 
 // ASSIGN COMMANDE
-router.put('/assign/:commandeId/:chauffeurId', authFournisseur, async (req, res) => {
+router.put('/assign/:commandeId/:chauffeurId', auth, role("fournisseur"), async (req, res) => {
 
   const commande = await Commande.findById(req.params.commandeId);
   const chauffeur = await Chauffeur.findById(req.params.chauffeurId);
@@ -67,7 +67,7 @@ router.put('/assign/:commandeId/:chauffeurId', authFournisseur, async (req, res)
 });
 
 // FINISH DELIVERY
-router.put('/livree/:id', authFournisseur, async (req, res) => {
+router.put('/livree/:id', auth, role("fournisseur"), async (req, res) => {
 
   const commande = await Commande.findById(req.params.id);
 
@@ -82,7 +82,7 @@ router.put('/livree/:id', authFournisseur, async (req, res) => {
   res.json({ msg: "Livraison terminée" });
 });
 
-router.put('/cancel/:id', authClient, async (req, res) => {
+router.put('/cancel/:id', auth, role("client"), async (req, res) => {
 
   const commande = await Commande.findById(req.params.id);
 
@@ -118,7 +118,7 @@ router.put('/cancel/:id', authClient, async (req, res) => {
 });
 
 
-router.get('/', authFournisseur, async (req, res) => {
+router.get('/', auth, role("fournisseur"), async (req, res) => {
 
   const { status } = req.query;
 
@@ -138,7 +138,7 @@ router.get('/', authFournisseur, async (req, res) => {
 
 
 
-router.get('/my', authClient, async (req, res) => {
+router.get('/my', auth, role("client"), async (req, res) => {
 
   const commandes = await Commande.find({ client: req.user });
 

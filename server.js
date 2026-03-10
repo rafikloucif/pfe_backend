@@ -22,6 +22,7 @@ app.use(cors());
 app.use(limiter);
 
 // routes
+app.use('/api/auth', require('./routes/auth.route'));
 app.use('/api/clients', require('./routes/client.routes'));
 app.use('/api/fournisseurs', require('./routes/fournisseur.routes'));
 app.use('/api/chauffeurs', require('./routes/chauffeur.routes'));
