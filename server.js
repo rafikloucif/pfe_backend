@@ -21,7 +21,7 @@ app.use(express.json());
 app.use(helmet());
 app.use(cors());
 app.use(limiter);
-app.use(mongoSanitize);
+app.use(mongoSanitize());
 
 // routes
 app.use('/api/auth', require('./routes/auth.route'));
