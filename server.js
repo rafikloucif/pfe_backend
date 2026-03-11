@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 const express = require('express');
 const connectDB = require('./config/db');
 const aiRoutes = require('./routes/ai.routes');
+const mongoSanitize = require('express-mongo-sanitize');
 const app = express();
 const limiter =rateLimit({
 
@@ -20,6 +21,7 @@ app.use(express.json());
 app.use(helmet());
 app.use(cors());
 app.use(limiter);
+app.use(mongoSanitize);
 
 // routes
 app.use('/api/auth', require('./routes/auth.route'));
