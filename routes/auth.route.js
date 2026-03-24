@@ -81,8 +81,11 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ msg: "Wrong password" });
     }
 
-    // ✅ Fixed: was "client._id" — now correctly "user._id"
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+    // ✅ Role included in token
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET
+    );
 
     res.json({
       message: `Hello ${user.nom}`,
@@ -132,9 +135,16 @@ router.post("/choose-role", async (req, res) => {
     user.role = role;
     await user.save();
 
+    // ✅ Re-issue token with role now included
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET
+    );
+
     res.json({
       msg: "role saved",
-      role: user.role
+      role: user.role,
+      token  // ✅ Flutter must save this new token, replacing the old one
     });
 
   } catch (err) {
