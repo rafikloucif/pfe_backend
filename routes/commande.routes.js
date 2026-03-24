@@ -7,17 +7,18 @@ const role = require('../middleware/role');
 const router = express.Router();
 
 // CLIENT ADD COMMANDE
-router.post('/add', auth, role("client"), async (req, res) => {   
+router.post('/add', auth, role("client"), async (req, res) => {
 
-const { capacite, prix } = req.body;
+  const { capacite, prix } = req.body;
 
-if (!capacite || !prix) {
-  return res.status(400).json({ msg: "Tous les champs sont obligatoires" });
-}
+  if (!capacite || !prix) {
+    return res.status(400).json({ msg: "Tous les champs sont obligatoires" });
+  }
 
-if (capacite <= 0 || prix <= 0) {
-  return res.status(400).json({ msg: "Valeurs invalides" });
-}
+  if (capacite <= 0 || prix <= 0) {
+    return res.status(400).json({ msg: "Valeurs invalides" });
+  }
+
   const commande = new Commande({
     client: req.user.id,
     capacite,
@@ -45,8 +46,8 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("fournisseur"), async 
     return res.status(404).json({ msg: "Not found" });
   }
 
-  // ✅ Vérification ملكية
-  if (chauffeur.fournisseur.toString() !== req.user.toString()) {
+  // ✅ Fixed: compare with req.user.id (not req.user)
+  if (chauffeur.fournisseur.toString() !== req.user.id) {
     return res.status(403).json({ msg: "Ce chauffeur ne vous appartient pas" });
   }
 
@@ -63,7 +64,6 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("fournisseur"), async 
   await chauffeur.save();
 
   res.json({ msg: "Commande assignée avec succès" });
-
 });
 
 // FINISH DELIVERY
@@ -71,17 +71,24 @@ router.put('/livree/:id', auth, role("fournisseur"), async (req, res) => {
 
   const commande = await Commande.findById(req.params.id);
 
+  if (!commande) {
+    return res.status(404).json({ msg: "Commande introuvable" });
+  }
+
   commande.status = "livrée";
 
   const chauffeur = await Chauffeur.findById(commande.chauffeur);
-  chauffeur.disponible = true;
+  if (chauffeur) {
+    chauffeur.disponible = true;
+    await chauffeur.save();
+  }
 
   await commande.save();
-  await chauffeur.save();
 
   res.json({ msg: "Livraison terminée" });
 });
 
+// CANCEL COMMANDE
 router.put('/cancel/:id', auth, role("client"), async (req, res) => {
 
   const commande = await Commande.findById(req.params.id);
@@ -90,19 +97,16 @@ router.put('/cancel/:id', auth, role("client"), async (req, res) => {
     return res.status(404).json({ msg: "Commande introuvable" });
   }
 
-  // نتأكد بلي راهي تاع هذا client
-  if (commande.client.toString() !== req.user.toString()) {
+  // ✅ Fixed: compare with req.user.id (not req.user)
+  if (commande.client.toString() !== req.user.id) {
     return res.status(403).json({ msg: "Accès refusé" });
   }
 
-  // ما يقدرش يلغي إذا كانت livrée أو annulée
   if (commande.status === "livrée" || commande.status === "annulée") {
     return res.status(400).json({ msg: "Impossible d'annuler cette commande" });
   }
 
-  // إذا كانت en livraison لازم نرجع chauffeur disponible
   if (commande.status === "en livraison" && commande.chauffeur) {
-
     const chauffeur = await Chauffeur.findById(commande.chauffeur);
     if (chauffeur) {
       chauffeur.disponible = true;
@@ -114,16 +118,14 @@ router.put('/cancel/:id', auth, role("client"), async (req, res) => {
   await commande.save();
 
   res.json({ msg: "Commande annulée avec succès" });
-
 });
 
-
+// GET ALL COMMANDES (fournisseur, with optional status filter)
 router.get('/', auth, role("fournisseur"), async (req, res) => {
 
   const { status } = req.query;
 
   let filter = {};
-
   if (status) {
     filter.status = status;
   }
@@ -133,17 +135,13 @@ router.get('/', auth, role("fournisseur"), async (req, res) => {
     .populate('chauffeur');
 
   res.json(commandes);
-
 });
 
-
-
+// GET MY COMMANDES (client)
 router.get('/my', auth, role("client"), async (req, res) => {
 
-  const commandes = await Commande.find({ client: req.user });
-
+  const commandes = await Commande.find({ client: req.user.id });
   res.json(commandes);
-
 });
 
 module.exports = router;

@@ -7,23 +7,24 @@ const router = express.Router();
 // ADD CHAUFFEUR
 router.post('/add', auth, role("fournisseur"), async (req, res) => {
 
-const { nom, telephone, capaciteCamion } = req.body;
+  const { nom, telephone, capaciteCamion } = req.body;
 
-if (!nom || !prenom || !adresse ||  !telephone || !capaciteCamion) {
-  return res.status(400).json({ msg: "Tous les champs sont obligatoires" });
-}
+  if ((nom || !prenom || !adresse ||  !telephone || !capaciteCamion)) {
+    return res.status(400).json({ msg: "Tous les champs sont obligatoires" });
+  }
 
-if (capaciteCamion <= 0) {
-  return res.status(400).json({ msg: "Capacité invalide" });
-}
+  if (capaciteCamion <= 0) {
+    return res.status(400).json({ msg: "Capacité invalide" });
+  }
 
-  const chauffeur = new chauffeur({
-    nom: req.body.nom,
-    prenom: req.body.prenom,
-    telephone: req.body.telephone,
-    capaciteCamion: req.body.capaciteCamion,
-    adresse : req.body.adresse,
-    fournisseur:req.user
+  // ✅ Fixed: was "new chauffeur" (lowercase) — must be "new Chauffeur"
+  const chauffeur = new Chauffeur({
+    nom,
+    prenom,
+    telephone,
+    adresse,
+    capaciteCamion,
+    fournisseur: req.user.id
   });
 
   await chauffeur.save();
@@ -33,9 +34,9 @@ if (capaciteCamion <= 0) {
 // GET MY CHAUFFEURS
 router.get('/my', auth, role("fournisseur"), async (req, res) => {
 
-  const chauffeurs = await chauffeur.find({ fournisseur: req.user });
+  // ✅ Fixed: was "chauffeur.find" (lowercase) — must be "Chauffeur.find"
+  const chauffeurs = await Chauffeur.find({ fournisseur: req.user.id });
   res.json(chauffeurs);
-
 });
 
 module.exports = router;
