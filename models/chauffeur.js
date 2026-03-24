@@ -6,6 +6,10 @@ const chauffeurSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+   prenom: {
+    type: String,
+    required: true
+  },
 
   telephone: {
     type: String,
@@ -20,6 +24,10 @@ const chauffeurSchema = new mongoose.Schema({
   disponible: {
     type: Boolean,
     default: true
+  },
+   adresse: {
+    type: String,
+    required: true
   },
 
   fournisseur: {

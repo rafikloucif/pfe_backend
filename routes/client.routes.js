@@ -1,20 +1,18 @@
 const express = require("express");
 const router = express.Router();
-
 const auth = require("../middleware/auth");
 const role = require("../middleware/role");
-
 const User = require("../models/user");
 
-// GET ALL FOURNISSEURS WHO COMPLETED THEIR INFO
+// GET ALL FOURNISSEURS
 router.get("/fournisseurs", auth, role("client"), async (req, res) => {
   try {
-    // ✅ Only return fournisseurs who filled their info
+    // ✅ Just filter by role — no fournisseurInfo check
     const fournisseurs = await User.find({
-      role: "fournisseur",
-      fournisseurInfo: { $exists: true, $ne: null }
-    }).select("-password"); // ✅ never send passwords
+      role: "fournisseur"
+    }).select("-password");
 
+    console.log('Fournisseurs found:', fournisseurs.length);
     res.json(fournisseurs);
   } catch (err) {
     res.status(500).json({ error: err.message });

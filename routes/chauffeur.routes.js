@@ -9,7 +9,7 @@ router.post('/add', auth, role("fournisseur"), async (req, res) => {
 
 const { nom, telephone, capaciteCamion } = req.body;
 
-if (!nom || !telephone || !capaciteCamion) {
+if (!nom || !prenom || !adresse ||  !telephone || !capaciteCamion) {
   return res.status(400).json({ msg: "Tous les champs sont obligatoires" });
 }
 
@@ -19,9 +19,11 @@ if (capaciteCamion <= 0) {
 
   const chauffeur = new chauffeur({
     nom: req.body.nom,
+    prenom: req.body.prenom,
     telephone: req.body.telephone,
     capaciteCamion: req.body.capaciteCamion,
-    fournisseur: req.user
+    adresse : req.body.adresse,
+    fournisseur:req.user
   });
 
   await chauffeur.save();
