@@ -4,26 +4,26 @@ const router = express.Router();
 const auth = require("../middleware/auth");
 const role = require("../middleware/role");
 
-const user = require("../models/user");
+const User = require("../models/user"); // ✅ Capital U to avoid conflict
 
+// ADD FOURNISSEUR INFO
+router.post("/add-info", auth, role("fournisseur"), async (req, res) => {
+  try {
+    const { quantiteEau, wilayas } = req.body;
 
-router.post("/add-info",auth,role("fournisseur"),async(req,res)=>{
+    const foundUser = await User.findById(req.user.id); // ✅ renamed to avoid conflict
 
- const {quantiteEau,wilayas} = req.body;
+    if (!foundUser) {
+      return res.status(404).json({ error: "Utilisateur non trouvé" });
+    }
 
- const user = await user.findById(req.user.id);
+    foundUser.fournisseurInfo = { quantiteEau, wilayas };
+    await foundUser.save();
 
- user.fournisseurInfo = {
-  quantiteEau,
-  wilayas
- };
-
- await user.save();
-
- res.json({
-  msg:"info added"
- });
-
+    res.json({ msg: "info added" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
