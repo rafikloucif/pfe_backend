@@ -38,6 +38,12 @@ const userSchema = new mongoose.Schema({
     quantiteEau: Number,
     wilayas: [String]
   },
+
+  position: {
+  lat: { type: Number, default: null },
+  lon: { type: Number, default: null }
+},
+isOnline: { type: Boolean, default: false }
  
 });
 
