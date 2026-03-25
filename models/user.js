@@ -34,10 +34,10 @@ const userSchema = new mongoose.Schema({
     enum:["client","fournisseur"],
     default:null
   },
-     fournisseurInfo: {
-    quantiteEau: Number,
-    wilayas: [String]
-  },
+  fournisseurInfo: {
+  quantiteEau: { type: Number, default: 0 },
+  wilayas:     { type: [String], default: [] }
+},
 
   position: {
   lat: { type: Number, default: null },
