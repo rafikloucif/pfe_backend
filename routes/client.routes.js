@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
 const role = require("../middleware/role");
-const User = require("../models/User");
+const User = require("../models/user");
 
 // GET ALL FOURNISSEURS
 router.get("/fournisseurs", auth, role("client"), async (req, res) => {

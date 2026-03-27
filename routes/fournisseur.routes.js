@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
 const role = require("../middleware/role");
-const User = require("../models/User");
+const User = require("../models/user");
 
 // ADD FOURNISSEUR INFO
 router.post("/add-info", auth, role("fournisseur"), async (req, res) => {
@@ -13,7 +13,7 @@ router.post("/add-info", auth, role("fournisseur"), async (req, res) => {
       return res.status(400).json({ error: "quantiteEau et wilayas sont obligatoires" });
     }
 
-    const foundUser = await User.findById(req.User.id);
+    const foundUser = await User.findById(req.user.id);
 
     if (!foundUser) {
       return res.status(404).json({ error: "Utilisateur non trouvé" });
@@ -41,7 +41,7 @@ router.put("/position", auth, role("fournisseur"), async (req, res) => {
     const { lat, lon } = req.body;
 
     const foundUser = await User.findByIdAndUpdate(
-      req.User.id,
+      req.user.id,
       { 
         'position.lat': lat,
         'position.lon': lon,
@@ -59,7 +59,7 @@ router.put("/position", auth, role("fournisseur"), async (req, res) => {
 // SET OFFLINE
 router.put("/offline", auth, role("fournisseur"), async (req, res) => {
   try {
-    await User.findByIdAndUpdate(req.User.id, { isOnline: false });
+    await User.findByIdAndUpdate(req.user.id, { isOnline: false });
     res.json({ msg: "Hors ligne" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -69,9 +69,9 @@ router.put("/offline", auth, role("fournisseur"), async (req, res) => {
 // GET MY INFO (fournisseur only)
 router.get("/me", auth, role("fournisseur"), async (req, res) => {
   try {
-    const User = await User.findById(req.User.id).select('-password');
-    if (!User) return res.status(404).json({ error: "Utilisateur non trouvé" });
-    res.json(User);
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
+    res.json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

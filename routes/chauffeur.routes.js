@@ -9,7 +9,7 @@ router.post('/add', auth, role("fournisseur"), async (req, res) => {
 
   const { nom, telephone, capaciteCamion } = req.body;
 
-  if ((nom || !prenom || !adresse ||  !telephone || !capaciteCamion)) {
+  if (!nom || !prenom || !telephone ||!adresse || !capaciteCamion) {
     return res.status(400).json({ msg: "Tous les champs sont obligatoires" });
   }
 
@@ -24,7 +24,7 @@ router.post('/add', auth, role("fournisseur"), async (req, res) => {
     telephone,
     adresse,
     capaciteCamion,
-    fournisseur: req.User.id
+    fournisseur: req.user.id
   });
 
   await chauffeur.save();
@@ -35,7 +35,7 @@ router.post('/add', auth, role("fournisseur"), async (req, res) => {
 router.get('/my', auth, role("fournisseur"), async (req, res) => {
 
   // ✅ Fixed: was "chauffeur.find" (lowercase) — must be "Chauffeur.find"
-  const chauffeurs = await Chauffeur.find({ fournisseur: req.User.id });
+  const chauffeurs = await Chauffeur.find({ fournisseur: req.user.id });
   res.json(chauffeurs);
 });
 
