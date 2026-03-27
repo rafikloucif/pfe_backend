@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
 const role = require("../middleware/role");
-const User = require("../models/user");
+const User = require("../models/User");
 
 // ADD FOURNISSEUR INFO
 router.post("/add-info", auth, role("fournisseur"), async (req, res) => {
