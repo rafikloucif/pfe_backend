@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const userSchema = new mongoose.Schema({
+const UserSchema = new mongoose.Schema({
   nom: {
     type: String,
     required: true
@@ -47,4 +47,4 @@ isOnline: { type: Boolean, default: false }
  
 });
 
-module.exports = mongoose.models.user  ||  mongoose.model('user', userSchema);
+module.exports = mongoose.models.User  ||  mongoose.model('User', UserSchema);

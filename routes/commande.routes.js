@@ -16,7 +16,7 @@ router.post('/add', auth, role("client"), async (req, res) => {
       return res.status(400).json({ msg: "Valeurs invalides" });
     }
     const commande = new Commande({
-      client: req.user.id,
+      client: req.User.id,
       capacite,
       prix
     });
@@ -49,7 +49,7 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("fournisseur"), async 
     if (!commande || !chauffeur) {
       return res.status(404).json({ msg: "Not found" });
     }
-    if (chauffeur.fournisseur.toString() !== req.user.id) {
+    if (chauffeur.fournisseur.toString() !== req.User.id) {
       return res.status(403).json({ msg: "Ce chauffeur ne vous appartient pas" });
     }
     if (!chauffeur.disponible) {
@@ -95,7 +95,7 @@ router.put('/cancel/:id', auth, role("client"), async (req, res) => {
     if (!commande) {
       return res.status(404).json({ msg: "Commande introuvable" });
     }
-    if (commande.client.toString() !== req.user.id) {
+    if (commande.client.toString() !== req.User.id) {
       return res.status(403).json({ msg: "Accès refusé" });
     }
     if (commande.status === "livrée" || commande.status === "annulée") {
@@ -120,7 +120,7 @@ router.put('/cancel/:id', auth, role("client"), async (req, res) => {
 // GET ALL COMMANDES (fournisseur, with optional status filter)
 router.get('/', auth, role("fournisseur"), async (req, res) => {
   try {
-    console.log('GET /commandes — user:', req.user);
+    console.log('GET /commandes — User:', req.User);
     const { status } = req.query;
     let filter = {};
     if (status) filter.status = status;
@@ -138,7 +138,7 @@ router.get('/', auth, role("fournisseur"), async (req, res) => {
 // GET MY COMMANDES (client)
 router.get('/my', auth, role("client"), async (req, res) => {
   try {
-    const commandes = await Commande.find({ client: req.user.id });
+    const commandes = await Commande.find({ client: req.User.id });
     res.json(commandes);
   } catch (err) {
     console.error('GET /my error:', err.message);

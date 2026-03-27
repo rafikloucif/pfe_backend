@@ -27,14 +27,14 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ msg: "Password must be at least 6 characters" });
     }
 
-    const userExists = await User.findOne({ email });
-    if (userExists) {
+    const UserExists = await User.findOne({ email });
+    if (UserExists) {
       return res.status(400).json({ msg: "Email already used" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({
+    const User = new User({
       nom,
       prenom,
       telephone,
@@ -43,11 +43,11 @@ router.post("/register", async (req, res) => {
       adresse
     });
 
-    await user.save();
+    await User.save();
 
     res.json({
-      msg: "user created",
-      userId: user._id
+      msg: "User created",
+      UserId: User._id
     });
 
   } catch (err) {
@@ -71,30 +71,30 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ msg: "Email et password obligatoires" });
     }
 
-    const user = await User.findOne({ email });
-    if (!user) {
+    const User = await User.findOne({ email });
+    if (!User) {
       return res.status(404).json({ msg: "User not found" });
     }
 
-    const match = await bcrypt.compare(password, user.password);
+    const match = await bcrypt.compare(password, User.password);
     if (!match) {
       return res.status(401).json({ msg: "Wrong password" });
     }
 
     // ✅ Role included in token
     const token = jwt.sign(
-      { id: user._id, role: user.role },
+      { id: User._id, role: User.role },
       process.env.JWT_SECRET
     );
 
     res.json({
-      message: `Hello ${user.nom}`,
+      message: `Hello ${User.nom}`,
       token,
-      user: {
-        id: user._id,
-        nom: user.nom,
-        email: user.email,
-        role: user.role
+      User: {
+        id: User._id,
+        nom: User.nom,
+        email: User.email,
+        role: User.role
       }
     });
 
@@ -113,37 +113,37 @@ router.post("/choose-role", async (req, res) => {
 
   try {
 
-    const { userId, role } = req.body;
+    const { UserId, role } = req.body;
 
-    if (!userId || !role) {
-      return res.status(400).json({ msg: "userId and role are required" });
+    if (!UserId || !role) {
+      return res.status(400).json({ msg: "UserId and role are required" });
     }
 
     if (!["client", "fournisseur"].includes(role)) {
       return res.status(400).json({ msg: "Role must be client or fournisseur" });
     }
 
-    const user = await User.findById(userId);
-    if (!user) {
+    const User = await User.findById(UserId);
+    if (!User) {
       return res.status(404).json({ msg: "User not found" });
     }
 
-    if (user.role) {
+    if (User.role) {
       return res.status(400).json({ msg: "role already chosen" });
     }
 
-    user.role = role;
-    await user.save();
+    User.role = role;
+    await User.save();
 
     // ✅ Re-issue token with role now included
     const token = jwt.sign(
-      { id: user._id, role: user.role },
+      { id: User._id, role: User.role },
       process.env.JWT_SECRET
     );
 
     res.json({
       msg: "role saved",
-      role: user.role,
+      role: User.role,
       token  // ✅ Flutter must save this new token, replacing the old one
     });
 

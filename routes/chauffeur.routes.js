@@ -24,7 +24,7 @@ router.post('/add', auth, role("fournisseur"), async (req, res) => {
     telephone,
     adresse,
     capaciteCamion,
-    fournisseur: req.user.id
+    fournisseur: req.User.id
   });
 
   await chauffeur.save();
@@ -35,7 +35,7 @@ router.post('/add', auth, role("fournisseur"), async (req, res) => {
 router.get('/my', auth, role("fournisseur"), async (req, res) => {
 
   // ✅ Fixed: was "chauffeur.find" (lowercase) — must be "Chauffeur.find"
-  const chauffeurs = await Chauffeur.find({ fournisseur: req.user.id });
+  const chauffeurs = await Chauffeur.find({ fournisseur: req.User.id });
   res.json(chauffeurs);
 });
 
