@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const commandeSchema = new mongoose.Schema({
-  
+
   client: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',        // ✅ Fixed: was 'Client' — must match your User model
@@ -29,6 +29,12 @@ const commandeSchema = new mongoose.Schema({
     enum: ['en attente', 'acceptée', 'en livraison', 'livrée', 'annulée'], // ✅ Added 'annulée'
     default: 'en attente'
   },
+
+  fournisseur: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'User',
+  default: null
+},
 
   date: {
     type: Date,
