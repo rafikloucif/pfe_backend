@@ -39,6 +39,15 @@ const UserSchema = new mongoose.Schema({
   wilayas:     { type: [String], default: [] }
 },
 
+
+  verified: {
+    type: Boolean,
+    default: false
+  },
+
+  verificationCode: String,
+  verificationCodeExpires: Date,
+
   position: {
   lat: { type: Number, default: null },
   lon: { type: Number, default: null }
