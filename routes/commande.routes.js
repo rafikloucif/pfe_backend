@@ -19,7 +19,9 @@ router.post('/add', auth, role("client"), async (req, res) => {
       client: req.user.id,
       fournisseur: fournisseurId || null, // ✅ save chosen fournisseur
       capacite,
-      prix
+      prix,
+      lat: req.body.lat || null,  // ✅ add this
+      lon: req.body.lon || null  // ✅ add this
     });
     await commande.save();
     res.json(commande);

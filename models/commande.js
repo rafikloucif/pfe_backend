@@ -30,6 +30,9 @@ const commandeSchema = new mongoose.Schema({
     default: 'en attente'
   },
 
+lat: { type: Number, default: null },
+lon: { type: Number, default: null },
+
   fournisseur: {
   type: mongoose.Schema.Types.ObjectId,
   ref: 'User',
