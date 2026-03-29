@@ -38,4 +38,4 @@ const chauffeurSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-module.exports = mongoose.model('chauffeur', chauffeurSchema);
+module.exports = mongoose.model('Chauffeur', chauffeurSchema);
