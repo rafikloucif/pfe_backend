@@ -40,14 +40,6 @@ const UserSchema = new mongoose.Schema({
 },
 
 
-  verified: {
-    type: Boolean,
-    default: false
-  },
-
-  verificationCode: String,
-  verificationCodeExpires: Date,
-
   position: {
   lat: { type: Number, default: null },
   lon: { type: Number, default: null }

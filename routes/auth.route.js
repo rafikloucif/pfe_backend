@@ -4,7 +4,6 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
 const validator = require("validator");
-const transporter = require("../config/mailer");
 
 
 // ─────────────────────────────────────────
@@ -32,7 +31,7 @@ router.post("/register", async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    
 
     const user = new User({
       nom,
@@ -41,21 +40,17 @@ router.post("/register", async (req, res) => {
       email,
       password: hashedPassword,
       adresse,
-      verificationCode: code,
-      verificationCodeExpires: Date.now() + 10 * 60 * 1000 // 10 minutes
+     
     });
 
     await user.save();
 
-    // ✅ Send via Gmail App Password
-    await transporter.sendMail({
-      from: `"Water App" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: 'Code de vérification',
-      text: `Bonjour ${nom},\n\nVotre code de vérification est : ${code}\n\nCe code expire dans 10 minutes.`,
+  res.json({
+      msg: "user created",
+      userId: user._id
     });
 
-    res.json({ msg: "Verification code sent", userId: user._id });
+   
 
   } catch (err) {
     console.error('REGISTER error:', err.message);
@@ -64,38 +59,6 @@ router.post("/register", async (req, res) => {
 });
 
 
-// ─────────────────────────────────────────
-// VERIFY EMAIL
-// ─────────────────────────────────────────
-router.post("/verify-email", async (req, res) => {
-  try {
-    const { userId, code } = req.body;
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ msg: "User not found" });
-    }
-
-    if (user.verificationCode !== code) {
-      return res.status(400).json({ msg: "Invalid code" });
-    }
-
-    if (user.verificationCodeExpires < Date.now()) {
-      return res.status(400).json({ msg: "Code expired" });
-    }
-
-    user.verified = true;
-    user.verificationCode = null;
-    user.verificationCodeExpires = null;
-    await user.save();
-
-    res.json({ msg: "Email verified" });
-
-  } catch (err) {
-    console.error('VERIFY email error:', err.message);
-    res.status(500).json({ msg: err.message });
-  }
-});
 
 
 // ─────────────────────────────────────────
@@ -114,9 +77,7 @@ router.post("/login", async (req, res) => {
       return res.status(404).json({ msg: "User not found" });
     }
 
-    if (!user.verified) {
-      return res.status(400).json({ msg: "Verify your email first" });
-    }
+    
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
