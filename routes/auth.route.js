@@ -59,12 +59,6 @@ router.post("/register", async (req, res) => {
 
     res.json({ msg: "Verification code sent", userId: user._id });
 
-  res.json({
-      msg: "user created",
-      userId: user._id
-    });
-
-
 
   } catch (err) {
     res.status(500).json({ msg: err.message });
