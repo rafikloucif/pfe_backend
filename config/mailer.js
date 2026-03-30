@@ -1,9 +1,12 @@
-const Mailjet = require('node-mailjet');
+const nodemailer = require('nodemailer');
 
-// ✅ Mailjet — free 200 emails/day, works on Render, no domain needed
-const mailjet = Mailjet.apiConnect(
-  process.env.MAILJET_API_KEY,
-  process.env.MAILJET_SECRET_KEY
-);
+// ✅ Gmail App Password — works on Render, no SMTP blocking
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS, // ✅ 16-char App Password, NOT your real password
+  }
+});
 
-module.exports = mailjet;
+module.exports = transporter;

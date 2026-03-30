@@ -4,7 +4,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
 const validator = require("validator");
-const mailjet = require("../config/mailer");
+const transporter = require("../config/mailer");
 
 
 // ─────────────────────────────────────────
@@ -42,19 +42,17 @@ router.post("/register", async (req, res) => {
       password: hashedPassword,
       adresse,
       verificationCode: code,
-      verificationCodeExpires: Date.now() + 10 * 60 * 1000
+      verificationCodeExpires: Date.now() + 10 * 60 * 1000 // 10 minutes
     });
 
     await user.save();
 
-    // ✅ Send via Mailjet — HTTP API, not SMTP, works on Render
-    await mailjet.post('send', { version: 'v3.1' }).request({
-      Messages: [{
-        From: { Email: process.env.EMAIL_USER, Name: 'Water App' },
-        To:   [{ Email: email }],
-        Subject: 'Code de vérification',
-        TextPart: `Bonjour ${nom},\n\nVotre code de vérification est : ${code}\n\nCe code expire dans 10 minutes.`,
-      }]
+    // ✅ Send via Gmail App Password
+    await transporter.sendMail({
+      from: `"Water App" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'Code de vérification',
+      text: `Bonjour ${nom},\n\nVotre code de vérification est : ${code}\n\nCe code expire dans 10 minutes.`,
     });
 
     res.json({ msg: "Verification code sent", userId: user._id });
