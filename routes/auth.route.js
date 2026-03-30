@@ -4,7 +4,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
 const validator = require("validator");
-const resend = require("../config/mailer");
+const mailjet = require("../config/mailer");
 
 
 // ─────────────────────────────────────────
@@ -32,7 +32,6 @@ router.post("/register", async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
     const user = new User({
@@ -43,17 +42,19 @@ router.post("/register", async (req, res) => {
       password: hashedPassword,
       adresse,
       verificationCode: code,
-      verificationCodeExpires: Date.now() + 10 * 60 * 1000 // 10 minutes
+      verificationCodeExpires: Date.now() + 10 * 60 * 1000
     });
 
     await user.save();
 
-    // ✅ Send via Resend (works on Render free tier — no SMTP blocking)
-    await resend.emails.send({
-      from: 'onboarding@resend.dev', // use this for testing
-      to: email,
-      subject: 'Code de vérification',
-      text: `Votre code de vérification est : ${code}\n\nCe code expire dans 10 minutes.`,
+    // ✅ Send via Mailjet — HTTP API, not SMTP, works on Render
+    await mailjet.post('send', { version: 'v3.1' }).request({
+      Messages: [{
+        From: { Email: process.env.EMAIL_USER, Name: 'Water App' },
+        To:   [{ Email: email }],
+        Subject: 'Code de vérification',
+        TextPart: `Bonjour ${nom},\n\nVotre code de vérification est : ${code}\n\nCe code expire dans 10 minutes.`,
+      }]
     });
 
     res.json({ msg: "Verification code sent", userId: user._id });
@@ -184,7 +185,7 @@ router.post("/choose-role", async (req, res) => {
     res.json({
       msg:   "role saved",
       role:  user.role,
-      token  // ✅ Flutter saves this new token
+      token
     });
 
   } catch (err) {

@@ -1,5 +1,9 @@
-const { Resend } = require('resend');
+const Mailjet = require('node-mailjet');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// ✅ Mailjet — free 200 emails/day, works on Render, no domain needed
+const mailjet = Mailjet.apiConnect(
+  process.env.MAILJET_API_KEY,
+  process.env.MAILJET_SECRET_KEY
+);
 
-module.exports = resend;
+module.exports = mailjet;
