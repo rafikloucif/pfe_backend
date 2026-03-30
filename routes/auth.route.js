@@ -4,16 +4,14 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
 const validator = require("validator");
-const transporter=require("../config/mailer");
+const resend = require("../config/mailer");
 
 
 // ─────────────────────────────────────────
 // REGISTER
 // ─────────────────────────────────────────
 router.post("/register", async (req, res) => {
-
   try {
-
     const { nom, prenom, telephone, email, password, adresse } = req.body;
 
     if (!validator.isEmail(email)) {
@@ -45,65 +43,67 @@ router.post("/register", async (req, res) => {
       password: hashedPassword,
       adresse,
       verificationCode: code,
-      verificationCodeExpires: Date.now() + 10 * 60 * 1000
+      verificationCodeExpires: Date.now() + 10 * 60 * 1000 // 10 minutes
     });
 
     await user.save();
 
-     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    // ✅ Send via Resend (works on Render free tier — no SMTP blocking)
+    await resend.emails.send({
+      from: 'onboarding@resend.dev', // use this for testing
       to: email,
-      subject: "Email Verification",
-      text: `Your verification code is ${code}`
+      subject: 'Code de vérification',
+      text: `Votre code de vérification est : ${code}\n\nCe code expire dans 10 minutes.`,
     });
 
     res.json({ msg: "Verification code sent", userId: user._id });
 
-
   } catch (err) {
+    console.error('REGISTER error:', err.message);
     res.status(500).json({ msg: err.message });
   }
 });
 
-//verfier email
 
+// ─────────────────────────────────────────
+// VERIFY EMAIL
+// ─────────────────────────────────────────
 router.post("/verify-email", async (req, res) => {
-  const { userId, code } = req.body;
+  try {
+    const { userId, code } = req.body;
 
-  const user = await User.findById(userId);
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ msg: "User not found" });
+    }
 
-  if (!user) {
-    return res.status(404).json({ msg: "User not found" });
+    if (user.verificationCode !== code) {
+      return res.status(400).json({ msg: "Invalid code" });
+    }
+
+    if (user.verificationCodeExpires < Date.now()) {
+      return res.status(400).json({ msg: "Code expired" });
+    }
+
+    user.verified = true;
+    user.verificationCode = null;
+    user.verificationCodeExpires = null;
+    await user.save();
+
+    res.json({ msg: "Email verified" });
+
+  } catch (err) {
+    console.error('VERIFY email error:', err.message);
+    res.status(500).json({ msg: err.message });
   }
-
-  if (user.verificationCode !== code) {
-    return res.status(400).json({ msg: "Invalid code" });
-  }
-
-  if (user.verificationCodeExpires < Date.now()) {
-    return res.status(400).json({ msg: "Code expired" });
-  }
-
-  user.verified = true;
-  user.verificationCode = null;
-
-  await user.save();
-
-  res.json({ msg: "Email verified" });
 });
-
-
-
-
 
 
 // ─────────────────────────────────────────
 // LOGIN
 // ─────────────────────────────────────────
 router.post("/login", async (req, res) => {
-
   try {
-
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -115,9 +115,9 @@ router.post("/login", async (req, res) => {
       return res.status(404).json({ msg: "User not found" });
     }
 
-      if (!user.verified) {
-    return res.status(400).json({ msg: "Verify your email first" });
-  }
+    if (!user.verified) {
+      return res.status(400).json({ msg: "Verify your email first" });
+    }
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
@@ -134,18 +134,17 @@ router.post("/login", async (req, res) => {
       message: `Hello ${user.nom}`,
       token,
       user: {
-        id: user._id,
-        nom: user.nom,
+        id:    user._id,
+        nom:   user.nom,
         email: user.email,
-        role: user.role
+        role:  user.role
       }
     });
 
   } catch (err) {
-    console.error(err);
+    console.error('LOGIN error:', err.message);
     res.status(500).json({ msg: "Server error" });
   }
-
 });
 
 
@@ -153,9 +152,7 @@ router.post("/login", async (req, res) => {
 // CHOOSE ROLE (once only)
 // ─────────────────────────────────────────
 router.post("/choose-role", async (req, res) => {
-
   try {
-
     const { userId, role } = req.body;
 
     if (!userId || !role) {
@@ -178,23 +175,22 @@ router.post("/choose-role", async (req, res) => {
     user.role = role;
     await user.save();
 
-    // ✅ Re-issue token with role now included
+    // ✅ Re-issue token with role included
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET
     );
 
     res.json({
-      msg: "role saved",
-      role: user.role,
-      token  // ✅ Flutter must save this new token, replacing the old one
+      msg:   "role saved",
+      role:  user.role,
+      token  // ✅ Flutter saves this new token
     });
 
   } catch (err) {
-    console.error(err);
+    console.error('CHOOSE ROLE error:', err.message);
     res.status(500).json({ msg: "Server error" });
   }
-
 });
 
 module.exports = router;
