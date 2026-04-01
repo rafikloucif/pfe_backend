@@ -19,4 +19,26 @@ router.get("/fournisseurs", auth, role("client"), async (req, res) => {
   }
 });
 
+
+// UPDATE CLIENT POSITION
+router.put("/position", auth, role("client"), async (req, res) => {
+  try {
+    const { lat, lon } = req.body;
+
+    const foundUser = await User.findByIdAndUpdate(
+      req.user.id,
+      { 
+        'position.lat': lat,
+        'position.lon': lon,
+        isOnline: true
+      },
+      { new: true }
+    );
+
+    res.json({ msg: "Position mise à jour", position: foundUser.position });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
