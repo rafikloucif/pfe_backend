@@ -51,6 +51,9 @@ router.delete('/:id', auth, role("gerant"), async (req, res) => {
       return res.status(404).json({ msg: "Chauffeur non trouvé" });
     }
     await chauffeur.deleteOne();
+    await User.findByIdAndUpdate(req.user.id, {
+      $pull: { 'gerantInfo.chauffeurs': chauffeur._id }
+    });
     res.json({ msg: "Chauffeur supprimé" });
   } catch (err) {
     res.status(500).json({ msg: "Server error", error: err.message });
