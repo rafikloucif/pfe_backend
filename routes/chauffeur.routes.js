@@ -60,4 +60,33 @@ router.delete('/:id', auth, role("gerant"), async (req, res) => {
   }
 });
 
+
+//join
+router.post('/join', auth, role("chauffeur"), async (req, res) => {
+  try {
+    const { code } = req.body;
+    const gerant = await User.findOne({ 'gerantInfo.code': code });
+    if (!gerant) return res.status(404).json({ msg: "Code invalide" });
+
+    // Create chauffeur document linked to this gérant
+    const chauffeur = new Chauffeur({
+      nom:      req.user.nom,
+      prenom:   req.user.prenom,
+      telephone: req.user.telephone,
+      adresse:  req.user.adresse,
+      capaciteCamion: req.body.capaciteCamion,
+      gerant:   gerant._id,
+    });
+    await chauffeur.save();
+
+    await User.findByIdAndUpdate(gerant._id, {
+      $push: { 'gerantInfo.chauffeurs': chauffeur._id }
+    });
+
+    res.json({ msg: "Vous avez rejoint le gérant", chauffeur });
+  } catch (err) {
+    res.status(500).json({ msg: "Server error", error: err.message });
+  }
+});
+
 module.exports = router;

@@ -40,7 +40,8 @@ const UserSchema = new mongoose.Schema({
 },
 
 gerantInfo: {
-  chauffeurs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+  chauffeurs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  code: { type: String, default: null } // ← unique code for each gérant
 },
 
 

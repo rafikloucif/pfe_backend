@@ -133,6 +133,12 @@ router.post("/choose-role", async (req, res) => {
     }
 
     user.role = role;
+    const { v4: uuidv4 } = require('uuid');
+
+// in choose-role, after user.role = role:
+if (role === 'gerant') {
+  user.gerantInfo.code = uuidv4().slice(0, 8).toUpperCase(); // e.g. "A3F9B2C1"
+}
     await user.save();
 
     // ✅ Re-issue token with role included
