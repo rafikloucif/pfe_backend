@@ -58,25 +58,7 @@ router.get('/me', auth, role("chauffeur"), async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────
-// CHAUFFEUR MANAGEMENT (GERANT)
-// ─────────────────────────────────────────
 
-router.post('/add', auth, role("gerant"), async (req, res) => {
-  try {
-    const { nom, prenom, telephone, adresse, capaciteCamion } = req.body;
-    if (!nom || !prenom || !telephone || !adresse || !capaciteCamion) {
-      return res.status(400).json({ msg: "Tous les champs sont obligatoires" });
-    }
-    if (capaciteCamion <= 0) return res.status(400).json({ msg: "Capacité invalide" });
-    const chauffeur = new Chauffeur({ nom, prenom, telephone, adresse, capaciteCamion, gerant: req.user.id });
-    await chauffeur.save();
-    await User.findByIdAndUpdate(req.user.id, { $push: { 'gerantInfo.chauffeurs': chauffeur._id } });
-    res.json(chauffeur);
-  } catch (err) {
-    res.status(500).json({ msg: "Server error", error: err.message });
-  }
-});
 
 // ← fetches User accounts with role "chauffeur" linked to this gerant
 router.get('/my', auth, role("gerant"), async (req, res) => {
