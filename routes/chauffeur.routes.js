@@ -23,6 +23,9 @@ router.post('/add', auth, role("gerant"), async (req, res) => {
       gerant: req.user.id        // ← renamed from fournisseur to gerant
     });
     await chauffeur.save();
+    await User.findByIdAndUpdate(req.user.id, {
+      $push: { 'gerantInfo.chauffeurs': chauffeur._id }
+});
     res.json(chauffeur);
   } catch (err) {
     res.status(500).json({ msg: "Server error", error: err.message });
