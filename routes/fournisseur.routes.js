@@ -6,10 +6,10 @@ const User = require('../models/user');
 const Chauffeur = require('../models/chauffeur');
 
 // ─────────────────────────────────────────
-// FOURNISSEUR (CHAUFFEUR) INFO
+// CHAUFFEUR INFO
 // ─────────────────────────────────────────
 
-router.post('/add-info', auth, role("fournisseur"), async (req, res) => {
+router.post('/add-info', auth, role("chauffeur"), async (req, res) => {
   try {
     const { quantiteEau, wilayas } = req.body;
     if (!quantiteEau || !wilayas) {
@@ -25,7 +25,7 @@ router.post('/add-info', auth, role("fournisseur"), async (req, res) => {
   }
 });
 
-router.put('/position', auth, role("fournisseur"), async (req, res) => {
+router.put('/position', auth, role("chauffeur"), async (req, res) => {
   try {
     const { lat, lon } = req.body;
     const foundUser = await User.findByIdAndUpdate(
@@ -39,7 +39,7 @@ router.put('/position', auth, role("fournisseur"), async (req, res) => {
   }
 });
 
-router.put('/offline', auth, role("fournisseur"), async (req, res) => {
+router.put('/offline', auth, role("chauffeur"), async (req, res) => {
   try {
     await User.findByIdAndUpdate(req.user.id, { isOnline: false });
     res.json({ msg: "Hors ligne" });
@@ -48,7 +48,7 @@ router.put('/offline', auth, role("fournisseur"), async (req, res) => {
   }
 });
 
-router.get('/me', auth, role("fournisseur"), async (req, res) => {
+router.get('/me', auth, role("chauffeur"), async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
     if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
@@ -78,9 +78,17 @@ router.post('/add', auth, role("gerant"), async (req, res) => {
   }
 });
 
+// ← fetches User accounts with role "chauffeur" linked to this gerant
 router.get('/my', auth, role("gerant"), async (req, res) => {
   try {
-    const chauffeurs = await Chauffeur.find({ gerant: req.user.id });
+    const gerant = await User.findById(req.user.id);
+    if (!gerant) return res.status(404).json({ msg: "Gérant non trouvé" });
+
+    const chauffeurs = await User.find({
+      _id: { $in: gerant.gerantInfo.chauffeurs },
+      role: "chauffeur"
+    }).select('-password');
+
     res.json(chauffeurs);
   } catch (err) {
     res.status(500).json({ msg: "Server error", error: err.message });
@@ -100,37 +108,29 @@ router.delete('/:id', auth, role("gerant"), async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// JOIN GERANT (FOURNISSEUR/CHAUFFEUR)
+// JOIN GERANT (CHAUFFEUR enters code)
 // ─────────────────────────────────────────
 
-router.post('/join', auth, role("fournisseur"), async (req, res) => {
+router.post('/join', auth, role("chauffeur"), async (req, res) => {
   try {
-    const { code, capaciteCamion } = req.body;
-    if (!code || !capaciteCamion) return res.status(400).json({ msg: "Code et capacité requis" });
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ msg: "Code requis" });
 
     const gerant = await User.findOne({ 'gerantInfo.code': code });
     if (!gerant) return res.status(404).json({ msg: "Code invalide" });
 
-    // Get full user info since req.user only has id and role
-    const chauffeurUser = await User.findById(req.user.id);
-    if (!chauffeurUser) return res.status(404).json({ msg: "Utilisateur introuvable" });
-
     // Prevent duplicate
-    const alreadyJoined = await Chauffeur.findOne({ gerant: gerant._id, telephone: chauffeurUser.telephone });
+    const alreadyJoined = gerant.gerantInfo.chauffeurs
+      .map(id => id.toString())
+      .includes(req.user.id.toString());
     if (alreadyJoined) return res.status(400).json({ msg: "Vous avez déjà rejoint ce gérant" });
 
-    const chauffeur = new Chauffeur({
-      nom:            chauffeurUser.nom,
-      prenom:         chauffeurUser.prenom,
-      telephone:      chauffeurUser.telephone,
-      adresse:        chauffeurUser.adresse,
-      capaciteCamion: parseFloat(capaciteCamion),
-      gerant:         gerant._id,
+    // Just link the chauffeur User ID to the gerant
+    await User.findByIdAndUpdate(gerant._id, {
+      $push: { 'gerantInfo.chauffeurs': req.user.id }
     });
-    await chauffeur.save();
-    await User.findByIdAndUpdate(gerant._id, { $push: { 'gerantInfo.chauffeurs': chauffeur._id } });
 
-    res.json({ msg: "Vous avez rejoint le gérant", chauffeur });
+    res.json({ msg: "Vous avez rejoint le gérant" });
   } catch (err) {
     res.status(500).json({ msg: "Server error", error: err.message });
   }
