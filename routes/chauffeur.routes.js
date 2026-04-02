@@ -2,6 +2,7 @@ const express = require('express');
 const Chauffeur = require('../models/chauffeur');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
+const User = require("../models/user");
 const router = express.Router();
 
 // ADD CHAUFFEUR
