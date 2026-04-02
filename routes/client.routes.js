@@ -9,7 +9,7 @@ router.get("/fournisseurs", auth, role("client"), async (req, res) => {
   try {
     // ✅ Just filter by role — no fournisseurInfo check
     const fournisseurs = await User.find({
-      role: "fournisseur"
+      role: "chauffeur"
     }).select("-password");
 
     console.log('Fournisseurs found:', fournisseurs.length);
