@@ -30,11 +30,11 @@ const chauffeurSchema = new mongoose.Schema({
     required: true
   },
 
-  fournisseur: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'fournisseur',
-    required: true
-  }
+ gerant: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'User',
+  required: true
+}
 
 }, { timestamps: true });
 

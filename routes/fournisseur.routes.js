@@ -5,7 +5,7 @@ const role = require("../middleware/role");
 const User = require("../models/user");
 
 // ADD FOURNISSEUR INFO
-router.post("/add-info", auth, role("fournisseur"), async (req, res) => {
+router.post("/add-info", auth, role("chauffeur"), async (req, res) => {
   try {
     const { quantiteEau, wilayas } = req.body;
 
@@ -36,7 +36,7 @@ router.post("/add-info", auth, role("fournisseur"), async (req, res) => {
 });
 
 // UPDATE FOURNISSEUR POSITION
-router.put("/position", auth, role("fournisseur"), async (req, res) => {
+router.put("/position", auth, role("chauffeur"), async (req, res) => {
   try {
     const { lat, lon } = req.body;
 
@@ -57,7 +57,7 @@ router.put("/position", auth, role("fournisseur"), async (req, res) => {
 });
 
 // SET OFFLINE
-router.put("/offline", auth, role("fournisseur"), async (req, res) => {
+router.put("/offline", auth, role("chauffeur"), async (req, res) => {
   try {
     await User.findByIdAndUpdate(req.user.id, { isOnline: false });
     res.json({ msg: "Hors ligne" });
@@ -67,7 +67,7 @@ router.put("/offline", auth, role("fournisseur"), async (req, res) => {
 });
 
 // GET MY INFO (fournisseur only)
-router.get("/me", auth, role("fournisseur"), async (req, res) => {
+router.get("/me", auth, role("chauffeur"), async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
     if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });

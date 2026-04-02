@@ -119,7 +119,7 @@ router.post("/choose-role", async (req, res) => {
       return res.status(400).json({ msg: "userId and role are required" });
     }
 
-    if (!["client", "fournisseur"].includes(role)) {
+    if (!["client", "chauffeur","gerant"].includes(role)) {
       return res.status(400).json({ msg: "Role must be client or fournisseur" });
     }
 

@@ -38,7 +38,7 @@ router.post('/add', auth, role("client"), async (req, res) => {
 });
 
 // FOURNISSEUR VOIR COMMANDES EN ATTENTE
-router.get('/pending', auth, role("fournisseur"), async (req, res) => {
+router.get('/pending', auth, role("chauffeur"), async (req, res) => {
   try {
     const commandes = await Commande.find({
       fournisseur: req.user.id,
@@ -54,7 +54,7 @@ router.get('/pending', auth, role("fournisseur"), async (req, res) => {
 });
 
 // GET ALL COMMANDES (fournisseur only)
-router.get('/', auth, role("fournisseur"), async (req, res) => {
+router.get('/', auth, role("chauffeur"), async (req, res) => {
   try {
     const { status } = req.query;
     let filter = { fournisseur: req.user.id };
@@ -152,7 +152,7 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("fournisseur"), async 
 });
 
 // FINISH DELIVERY
-router.put('/livree/:id', auth, role("fournisseur"), async (req, res) => {
+router.put('/livree/:id', auth, role("chauffeur"), async (req, res) => {
   try {
     const commande = await Commande.findById(req.params.id);
     if (!commande) {

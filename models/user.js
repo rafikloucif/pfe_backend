@@ -31,12 +31,16 @@ const UserSchema = new mongoose.Schema({
   },
      role: {
     type: String,
-    enum:["client","fournisseur"],
+    enum:["client","chauffeur","gerant"],
     default:null
   },
   fournisseurInfo: {
   quantiteEau: { type: Number, default: 0 },
   wilayas:     { type: [String], default: [] }
+},
+
+gerantInfo: {
+  chauffeurs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 },
 
 
