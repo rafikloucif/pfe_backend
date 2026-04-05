@@ -29,11 +29,16 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-     role: {
-    type: String,
-    enum:["client","chauffeur","gerant"],
-    default:null
-  },
+  role: {
+  type: String,
+  enum: ["client", "chauffeur", "gerant"],
+  default: null
+},
+secondaryRole: {
+  type: String,
+  enum: ["chauffeur", null],  // only gerant can have a secondary role
+  default: null
+},
   fournisseurInfo: {
   quantiteEau: { type: Number, default: 0 },
   wilayas:     { type: [String], default: [] }

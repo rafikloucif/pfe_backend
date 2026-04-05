@@ -56,27 +56,36 @@ router.post("/login", async (req, res) => {
 // ─────────────────────────────────────────
 router.post("/choose-role", async (req, res) => {
   try {
-    const { userId, role } = req.body;
-    if (!userId || !role) return res.status(400).json({ msg: "userId and role are required" });
-
-    // ← fixed: fournisseur not chauffeur
-    if (!["client", "chauffeur", "gerant"].includes(role)) {
-      return res.status(400).json({ msg: "Role must be client, fournisseur or gerant" });
-    }
+    const { userId, role, addSecondaryRole } = req.body;
 
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ msg: "User not found" });
-    if (user.role) return res.status(400).json({ msg: "role already chosen" });
+
+    // Adding chauffeur as secondary role to an existing gerant
+    if (addSecondaryRole) {
+      if (user.role !== 'gerant') return res.status(400).json({ msg: "Only gerant can have a secondary role" });
+      if (user.secondaryRole) return res.status(400).json({ msg: "Secondary role already set" });
+      user.secondaryRole = 'chauffeur';
+      await user.save();
+      const token = jwt.sign({ id: user._id, role: user.role, secondaryRole: user.secondaryRole }, process.env.JWT_SECRET);
+      return res.json({ msg: "secondary role saved", token });
+    }
+
+    // Normal first-time role selection
+    if (!["client", "chauffeur", "gerant"].includes(role)) {
+      return res.status(400).json({ msg: "Invalid role" });
+    }
+    if (user.role) return res.status(400).json({ msg: "Role already chosen" });
 
     user.role = role;
-
     if (role === 'gerant') {
       user.gerantInfo.code = uuidv4().slice(0, 8).toUpperCase();
     }
 
     await user.save();
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET);
+    const token = jwt.sign({ id: user._id, role: user.role, secondaryRole: user.secondaryRole }, process.env.JWT_SECRET);
     res.json({ msg: "role saved", role: user.role, token });
+
   } catch (err) {
     console.error('CHOOSE ROLE error:', err.message);
     res.status(500).json({ msg: "Server error" });
