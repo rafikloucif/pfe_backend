@@ -19,11 +19,11 @@ router.post('/add', auth, role("client"), async (req, res) => {
     }
 
     const commande = new Commande({
-      client:      req.user.id,
-      fournisseur: fournisseurId || null, // ✅ save chosen fournisseur
+      client: req.user.id,
+      fournisseur: fournisseurId || null,
       capacite,
       prix,
-      position: {                          // ✅ save client GPS as nested object
+      position: {
         lat: lat || null,
         lon: lon || null,
       },
@@ -97,20 +97,16 @@ router.get('/:id/track', auth, async (req, res) => {
       return res.status(404).json({ msg: "Commande introuvable" });
     }
 
-    // Get fournisseur live position
     const fournisseur = await User.findById(commande.fournisseur);
 
     res.json({
-      statut:     commande.status,
-      // ✅ Fournisseur live GPS position (updated when online)
+      statut: commande.status,
       driver_lat: fournisseur?.position?.lat ?? null,
       driver_lon: fournisseur?.position?.lon ?? null,
-      // ✅ Client delivery destination
       destination: {
         lat: commande.position?.lat ?? null,
         lon: commande.position?.lon ?? null,
       },
-      // ✅ Extra info
       chauffeur: commande.chauffeur ? {
         nom: commande.chauffeur.nom,
         telephone: commande.chauffeur.telephone,
@@ -127,24 +123,43 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("fournisseur"), async 
   try {
     const commande = await Commande.findById(req.params.commandeId);
     const chauffeur = await Chauffeur.findById(req.params.chauffeurId);
+    const fournisseur = await User.findById(req.user.id);
 
-    if (!commande || !chauffeur) {
+    if (!commande || !chauffeur || !fournisseur) {
       return res.status(404).json({ msg: "Not found" });
     }
+
     if (chauffeur.fournisseur.toString() !== req.user.id) {
       return res.status(403).json({ msg: "Ce chauffeur ne vous appartient pas" });
     }
+
     if (!chauffeur.disponible) {
       return res.status(400).json({ msg: "Chauffeur non disponible" });
     }
 
+    const quantiteActuelle = fournisseur.fournisseurInfo?.quantiteEau || 0;
+    const quantiteCommande = commande.capacite || 0;
+
+    if (quantiteActuelle < quantiteCommande) {
+      return res.status(400).json({
+        msg: "Quantité d'eau insuffisante pour cette commande"
+      });
+    }
+
+    fournisseur.fournisseurInfo.quantiteEau = quantiteActuelle - quantiteCommande;
+
     commande.chauffeur = chauffeur._id;
-    commande.status    = "en livraison";
+    commande.status = "en livraison";
     chauffeur.disponible = false;
 
+    await fournisseur.save();
     await commande.save();
     await chauffeur.save();
-    res.json({ msg: "Commande assignée avec succès" });
+
+    res.json({
+      msg: "Commande assignée avec succès",
+      nouvelleQuantiteEau: fournisseur.fournisseurInfo.quantiteEau
+    });
   } catch (err) {
     console.error('PUT /assign error:', err.message);
     res.status(500).json({ error: err.message });
