@@ -7,26 +7,33 @@ const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const router = express.Router();
 
-// URL du backend Python VRP
 const VRP_API = process.env.VRP_API_URL || 'http://localhost:8000';
+
+// ─── Compteur d'ID VRP ────────────────────────────────────────────
+// Le backend Python utilise des entiers comme IDs de commandes.
+// On génère un ID unique en combinant timestamp + random pour éviter
+// les collisions même en cas de redémarrage du serveur.
+function genVrpId() {
+  return Math.floor(Date.now() / 1000) % 100000 + Math.floor(Math.random() * 100);
+}
 
 // ─── CLIENT ADD COMMANDE ──────────────────────────────────────────
 router.post('/add', auth, role("client"), async (req, res) => {
   try {
     const { capacite, prix, fournisseurId, lat, lon } = req.body;
 
-    // Validation des champs obligatoires
     if (!capacite || !prix) {
       return res.status(400).json({ msg: "Tous les champs sont obligatoires" });
     }
     if (capacite <= 0 || prix <= 0) {
       return res.status(400).json({ msg: "Valeurs invalides" });
     }
-
-    // Anomalie 3 corrigée : lat/lon obligatoires pour le VRP
     if (lat == null || lon == null) {
       return res.status(400).json({ msg: "La position (lat, lon) est obligatoire" });
     }
+
+    // Générer un ID VRP unique pour cette commande
+    const vrpId = genVrpId();
 
     const commande = new Commande({
       client: req.user.id,
@@ -34,9 +41,25 @@ router.post('/add', auth, role("client"), async (req, res) => {
       capacite,
       prix,
       position: { lat, lon },
+      vrpId
     });
 
     await commande.save();
+
+    // Enregistrer la commande dans le backend Python (statut en_attente)
+    try {
+      await axios.post(`${VRP_API}/commandes/add`, {
+        id: vrpId,
+        lat,
+        lon,
+        demand: capacite,
+        description: `${capacite}L`
+      });
+      console.log(`Commande ${vrpId} enregistrée dans le VRP`);
+    } catch (vrpErr) {
+      console.warn(`VRP non notifié pour commande ${vrpId} :`, vrpErr.message);
+    }
+
     res.json(commande);
   } catch (err) {
     console.error('POST /add error:', err.message);
@@ -45,7 +68,6 @@ router.post('/add', auth, role("client"), async (req, res) => {
 });
 
 // ─── FOURNISSEUR VOIR COMMANDES EN ATTENTE ────────────────────────
-// Anomalie 1 corrigée : rôle "fournisseur" au lieu de "chauffeur"
 router.get('/pending', auth, role("fournisseur"), async (req, res) => {
   try {
     const commandes = await Commande.find({
@@ -62,7 +84,6 @@ router.get('/pending', auth, role("fournisseur"), async (req, res) => {
 });
 
 // ─── GET ALL COMMANDES (fournisseur only) ─────────────────────────
-// Anomalie 1 corrigée : rôle "fournisseur" au lieu de "chauffeur"
 router.get('/', auth, role("fournisseur"), async (req, res) => {
   try {
     const { status } = req.query;
@@ -106,8 +127,7 @@ router.get('/:id/track', auth, async (req, res) => {
       return res.status(404).json({ msg: "Commande introuvable" });
     }
 
-    // Anomalie 4 corrigée : fournisseur déjà populé, pas besoin
-    // d'une deuxième requête User.findById()
+    // fournisseur déjà populé — pas besoin d'une 2ème requête
     const fournisseur = commande.fournisseur;
 
     res.json({
@@ -166,14 +186,25 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("fournisseur"), async 
     await commande.save();
     await chauffeur.save();
 
-    // Anomalie 2 corrigée : notifier le backend Python VRP
-    // pour mettre à jour la solution et afficher la route sur la map
-    try {
-      await axios.post(`${VRP_API}/commandes/${commande._id}/ajouter-dynamique`);
-      console.log(`VRP notifié pour commande ${commande._id}`);
-    } catch (vrpErr) {
-      // Ne pas bloquer la réponse si le VRP est inaccessible
-      console.warn(`VRP non notifié pour commande ${commande._id} :`, vrpErr.message);
+    // ── Notifier le backend Python VRP ────────────────────────────
+    // Étape 1 : accepter la commande côté Python
+    // Étape 2 : insérer dynamiquement dans la solution (cheapest insertion + 2-opt)
+    // → c'est ce qui met à jour la map
+    if (commande.vrpId) {
+      try {
+        await axios.post(`${VRP_API}/commandes/accept`, {
+          commande_id: commande.vrpId,
+          action: "accepter"
+        });
+        console.log(`Commande ${commande.vrpId} acceptée côté VRP`);
+
+        await axios.post(`${VRP_API}/commandes/${commande.vrpId}/ajouter-dynamique`);
+        console.log(`Commande ${commande.vrpId} insérée dans la solution VRP`);
+      } catch (vrpErr) {
+        console.warn(`VRP non notifié pour commande ${commande.vrpId} :`, vrpErr.message);
+      }
+    } else {
+      console.warn(`Commande ${commande._id} sans vrpId — VRP non notifié`);
     }
 
     res.json({
@@ -194,8 +225,7 @@ router.put('/livree/:id', auth, role("chauffeur"), async (req, res) => {
       return res.status(404).json({ msg: "Commande introuvable" });
     }
 
-    // Anomalie 5 corrigée : vérifier que c'est bien le chauffeur
-    // assigné à cette commande qui la marque comme livrée
+    // Vérifier que c'est bien le chauffeur assigné
     if (!commande.chauffeur || commande.chauffeur.toString() !== req.user.id) {
       return res.status(403).json({ msg: "Accès refusé" });
     }

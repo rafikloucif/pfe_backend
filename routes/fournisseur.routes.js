@@ -1,12 +1,22 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const User = require('../models/user');
 const Chauffeur = require('../models/chauffeur');
 
+const VRP_API =  'http://localhost:8000';
+
+// ─── Génération d'un vrpId unique ────────────────────────────────
+// Même logique que pour les commandes — entier court, unique,
+// compatible avec le backend Python qui attend des IDs entiers.
+function genVrpId() {
+  return Math.floor(Date.now() / 1000) % 100000 + Math.floor(Math.random() * 100);
+}
+
 // ─────────────────────────────────────────
-// CHAUFFEUR INFO
+// FOURNISSEUR INFO
 // ─────────────────────────────────────────
 
 router.post('/add-info', auth, role("chauffeur"), async (req, res) => {
@@ -25,6 +35,9 @@ router.post('/add-info', auth, role("chauffeur"), async (req, res) => {
   }
 });
 
+// ─── UPDATE POSITION ─────────────────────────────────────────────
+// Notifie le backend Python pour mettre à jour la matrice de
+// distances avec la nouvelle position du chauffeur.
 router.put('/position', auth, role("chauffeur"), async (req, res) => {
   try {
     const { lat, lon } = req.body;
@@ -42,12 +55,16 @@ router.put('/position', auth, role("chauffeur"), async (req, res) => {
       { new: true }
     );
 
-    // Notifier le backend Python pour mettre à jour la matrice de distances
-    try {
-      await axios.put(`${VRP_API}`/conducteurs/`${req.user.id}`/position, { lat, lon });
-      console.log(`VRP notifié : position chauffeur ${req.user.id} mise à jour`);
-    } catch (vrpErr) {
-      console.warn(`VRP non notifié pour position chauffeur ${req.user.id} : vrpErr.message`);
+    // Notifier le VRP Python avec le vrpId du chauffeur
+    if (foundUser.vrpId) {
+      try {
+        await axios.put(`${VRP_API}/conducteurs/${foundUser.vrpId}/position`, { lat, lon });
+        console.log(`VRP : position chauffeur ${foundUser.vrpId} mise à jour`);
+      } catch (vrpErr) {
+        console.warn(`VRP non notifié pour chauffeur ${foundUser.vrpId} :`, vrpErr.message);
+      }
+    } else {
+      console.warn(`Chauffeur ${req.user.id} sans vrpId — VRP non notifié`);
     }
 
     res.json({ msg: "Position mise à jour", position: foundUser.position });
@@ -56,6 +73,7 @@ router.put('/position', auth, role("chauffeur"), async (req, res) => {
   }
 });
 
+// ─── OFFLINE ─────────────────────────────────────────────────────
 router.put('/offline', auth, role("chauffeur"), async (req, res) => {
   try {
     await User.findByIdAndUpdate(req.user.id, { isOnline: false });
@@ -65,6 +83,7 @@ router.put('/offline', auth, role("chauffeur"), async (req, res) => {
   }
 });
 
+// ─── GET ME ──────────────────────────────────────────────────────
 router.get('/me', auth, role("chauffeur"), async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
@@ -75,7 +94,7 @@ router.get('/me', auth, role("chauffeur"), async (req, res) => {
   }
 });
 
-// Fetches User accounts with role "chauffeur" linked to this gerant
+// ─── GET MY CHAUFFEURS (gérant) ───────────────────────────────────
 router.get('/my', auth, role("gerant"), async (req, res) => {
   try {
     const gerant = await User.findById(req.user.id);
@@ -92,6 +111,7 @@ router.get('/my', auth, role("gerant"), async (req, res) => {
   }
 });
 
+// ─── DELETE CHAUFFEUR (gérant) ────────────────────────────────────
 router.delete('/:id', auth, role("gerant"), async (req, res) => {
   try {
     const chauffeur = await Chauffeur.findOne({ _id: req.params.id, gerant: req.user.id });
@@ -107,9 +127,8 @@ router.delete('/:id', auth, role("gerant"), async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// JOIN GERANT (CHAUFFEUR enters code)
+// JOIN GERANT (chauffeur entre le code)
 // ─────────────────────────────────────────
-
 router.post('/join', auth, role("chauffeur"), async (req, res) => {
   try {
     const { code } = req.body;
@@ -118,7 +137,6 @@ router.post('/join', auth, role("chauffeur"), async (req, res) => {
     const gerant = await User.findOne({ 'gerantInfo.code': code });
     if (!gerant) return res.status(404).json({ msg: "Code invalide" });
 
-    // Empêcher les doublons
     const alreadyJoined = gerant.gerantInfo.chauffeurs
       .map(id => id.toString())
       .includes(req.user.id.toString());
@@ -129,6 +147,31 @@ router.post('/join', auth, role("chauffeur"), async (req, res) => {
     await User.findByIdAndUpdate(gerant._id, {
       $push: { 'gerantInfo.chauffeurs': req.user.id }
     });
+
+    // Générer et assigner un vrpId au chauffeur s'il n'en a pas encore
+    // puis l'enregistrer dans le backend Python
+    const chauffeurUser = await User.findById(req.user.id);
+    if (!chauffeurUser.vrpId) {
+      const vrpId = genVrpId();
+      chauffeurUser.vrpId = vrpId;
+      await chauffeurUser.save();
+
+      // Enregistrer le chauffeur dans le VRP
+      try {
+        await axios.post(`${VRP_API}/setup/conducteurs`, {
+          conducteurs: [{
+            id: vrpId,
+            lat: chauffeurUser.position?.lat || 36.7538,
+            lon: chauffeurUser.position?.lon || 3.0588,
+            capacity: 1000,
+            nom: `${chauffeurUser.nom || ''} ${chauffeurUser.prenom || ''}`.trim()
+          }]
+        });
+        console.log(`Chauffeur ${vrpId} enregistré dans le VRP`);
+      } catch (vrpErr) {
+        console.warn(`VRP non notifié pour chauffeur ${vrpId} :`, vrpErr.message);
+      }
+    }
 
     res.json({ msg: "Vous avez rejoint le gérant" });
   } catch (err) {

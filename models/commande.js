@@ -24,21 +24,25 @@ const commandeSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
-  telephone: String,
-  status: {
-    type: String,
-    enum: ['en attente', 'acceptée', 'en livraison', 'livrée', 'annulée'],
-    default: 'en attente'
-  },
-  // ✅ Client GPS position — stored as nested object for tracking
   position: {
     lat: { type: Number, default: null },
-    lon: { type: Number, default: null },
+    lon: { type: Number, default: null }
   },
-  date: {
-    type: Date,
-    default: Date.now
+  status: {
+    type: String,
+    enum: ['en attente', 'en livraison', 'livrée', 'annulée'],
+    default: 'en attente'
+  },
+
+  // ── ID Python VRP ──────────────────────────────────────────────
+  // Stocke l'identifiant utilisé par le backend FastAPI/NSGA-II.
+  // Permet de faire le lien entre MongoDB et le système VRP
+  // sans modifier la logique Python.
+  vrpId: {
+    type: Number,
+    default: null
   }
-});
+
+}, { timestamps: true });
 
 module.exports = mongoose.model('Commande', commandeSchema);
