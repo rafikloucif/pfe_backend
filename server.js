@@ -8,7 +8,7 @@ const positionRoutes = require('./routes/position.route');
 
 const app = express();
 
-const VRP_API ='http://localhost:8000/';
+const VRP_API = process.env.VRP_API || 'http://localhost:8000/';
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
