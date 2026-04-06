@@ -2,10 +2,10 @@ const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
   nom:       { type: String, required: true },
-  prenom:    { type: String, default: '' },
-  telephone: { type: String, default: '' },  // ✅ add — used in register
+  prenom:    { type: String, required: true },
+  telephone: { type: String, required: true },  // ✅ add — used in register
   email:     { type: String, required: true, unique: true },
-  adresse:   { type: String, default: '' },  // ✅ add — used in register
+  adresse:   { type: String, required: true},  // ✅ add — used in register
   password:  { type: String, required: true },
   role: {
     type: String,

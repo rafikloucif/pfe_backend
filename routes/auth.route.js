@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const User = require("../models/user");
 const validator = require("validator");
 const auth = require("../middleware/auth");
-const transporter = require("../config/mailer"); 
+const axios = require('axios');
 
 // ─────────────────────────────────────────
 // REGISTER — sends 6-digit OTP via EmailJS
@@ -58,25 +58,33 @@ router.post("/register", async (req, res) => {
     await user.save();
 
     // ✅ Send via EmailJS using One-Time Password template
-    
-  await transporter.sendMail({
-  from: `"Water App" <${process.env.EMAIL_USER}>`,
-  to: email,
-  subject: 'Your verification code',
-  html: `
-    <h2>Welcome to Water App</h2>
-    <p>Your verification code is:</p>
-    <h1 style="letter-spacing:8px; color:#0099CC;">${code}</h1>
-    <p>Expires at: <b>${timeStr}</b></p>
-  `,
+   try {
+ await axios.post('https://api.emailjs.com/api/v1.0/email/send', {
+  service_id:  process.env.EMAILJS_SERVICE_ID,
+  template_id: process.env.EMAILJS_TEMPLATE_ID,
+  user_id:     process.env.EMAILJS_PUBLIC_KEY,
+  accessToken: process.env.EMAILJS_PRIVATE_KEY,
+  template_params: {
+    email:    email,
+    passcode: code,
+    time:     timeStr,
+  }
 });
-console.log(`OTP sent to ${email}`);}
+console.log(` OTP sent to ${email}`);
 
-catch (emailErr) {
+} catch (emailErr) {
   console.error('❌ EmailJS error:', emailErr); // ✅ add this
   // ✅ Still return success so user can proceed
   // Email failed but user is created — don't block registration
 }
+
+res.json({ msg: "Verification code sent", userId: user._id });
+
+
+  } catch (err) {
+    console.error('REGISTER error:', err.message);
+    res.status(500).json({ msg: err.message });
+  }
 });
 
 // ─────────────────────────────────────────
