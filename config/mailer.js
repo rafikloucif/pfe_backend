@@ -1,8 +1,11 @@
-const emailjs = require('@emailjs/nodejs');
+const nodemailer = require('nodemailer');
 
-emailjs.init({
-  publicKey:  process.env.EMAILJS_PUBLIC_KEY,
-  privateKey: process.env.EMAILJS_PRIVATE_KEY,
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
 });
 
-module.exports = emailjs;
+module.exports = transporter;
