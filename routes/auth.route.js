@@ -65,7 +65,7 @@ router.post("/register", async (req, res) => {
   user_id:     process.env.EMAILJS_PUBLIC_KEY,
   accessToken: process.env.EMAILJS_PRIVATE_KEY,
   template_params: {
-    email:    email,
+    email:    "rezikrabah1@gmail.com",
     passcode: code,
     time:     timeStr,
   }
