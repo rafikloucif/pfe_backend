@@ -13,6 +13,7 @@ const emailjs = require("../config/mailer"); // ✅ EmailJS
 // ─────────────────────────────────────────
 router.post("/register", async (req, res) => {
   try {
+    console.log('REGISTER body:', req.body);
     const { nom, prenom, telephone, email, password, adresse } = req.body;
 
     if (!validator.isEmail(email)) {
