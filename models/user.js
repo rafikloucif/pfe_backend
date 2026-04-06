@@ -1,15 +1,25 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-  nom: { type: String, required: true },
-  prenom: { type: String, default: '' },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  nom:       { type: String, required: true },
+  prenom:    { type: String, default: '' },
+  telephone: { type: String, default: '' },  // ✅ add — used in register
+  adresse:   { type: String, default: '' },  // ✅ add — used in register
+  email:     { type: String, required: true, unique: true },
+  password:  { type: String, required: true },
   role: {
     type: String,
-    enum: ['client', 'fournisseur', 'chauffeur', 'gerant'],
-    required: true
+    enum: ['client',  'chauffeur', 'gerant'],
+    default : null 
   },
+
+
+verified: { type: Boolean, default: false },
+  verificationCode: { type: String, default: null },
+  verificationCodeExpires: { type: Date, default: null },
+
+
+
   position: {
     lat: { type: Number, default: null },
     lon: { type: Number, default: null }
