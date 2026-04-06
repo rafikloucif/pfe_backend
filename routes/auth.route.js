@@ -63,9 +63,9 @@ router.post("/register", async (req, res) => {
     process.env.EMAILJS_SERVICE_ID,
     process.env.EMAILJS_TEMPLATE_ID,
     {
-      email:    email,
-      passcode: code,
-      time:     timeStr,
+      email:email,
+      passcode:code,
+      time:timeStr,
     }
   );
   console.log(` OTP sent to ${email}`);
