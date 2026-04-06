@@ -12,6 +12,12 @@ const axios = require('axios');
 // REGISTER — sends 6-digit OTP via EmailJS
 // ─────────────────────────────────────────
 router.post("/register", async (req, res) => {
+  console.log('ENV CHECK:', {
+    service:  process.env.EMAILJS_SERVICE_ID,
+    template: process.env.EMAILJS_TEMPLATE_ID,
+    pubkey:   process.env.EMAILJS_PUBLIC_KEY,
+    privkey:  process.env.EMAILJS_PRIVATE_KEY ? '✅ set' : '❌ missing',
+   });
   try {
     console.log('REGISTER body:', req.body);
     const { nom, prenom, telephone, email, password, adresse } = req.body;
@@ -65,9 +71,13 @@ router.post("/register", async (req, res) => {
   user_id:     process.env.EMAILJS_PUBLIC_KEY,
   accessToken: process.env.EMAILJS_PRIVATE_KEY,
   template_params: {
-    email:    "rezikrabah1@gmail.com",
-    passcode: code,
-    time:     timeStr,
+    email:email,
+    passcode:code,
+    time:timeStr,
+  },
+  headers: {
+    'Content-Type': 'application/json',
+    'Origin': 'http://localhost/',   // ← ADD THIS — EmailJS blocks requests with no origin
   }
 });
 console.log(` OTP sent to ${email}`);
