@@ -28,11 +28,28 @@ router.post('/add-info', auth, role("chauffeur"), async (req, res) => {
 router.put('/position', auth, role("chauffeur"), async (req, res) => {
   try {
     const { lat, lon } = req.body;
+
+    if (lat == null || lon == null) {
+      return res.status(400).json({ msg: "lat et lon sont obligatoires" });
+    }
+    if (typeof lat !== "number" || typeof lon !== "number") {
+      return res.status(400).json({ msg: "lat et lon doivent être des nombres" });
+    }
+
     const foundUser = await User.findByIdAndUpdate(
       req.user.id,
       { 'position.lat': lat, 'position.lon': lon, isOnline: true },
       { new: true }
     );
+
+    // Notifier le backend Python pour mettre à jour la matrice de distances
+    try {
+      await axios.put(`${VRP_API}`/conducteurs/`${req.user.id}`/position, { lat, lon });
+      console.log(`VRP notifié : position chauffeur ${req.user.id} mise à jour`);
+    } catch (vrpErr) {
+      console.warn(`VRP non notifié pour position chauffeur ${req.user.id} : vrpErr.message`);
+    }
+
     res.json({ msg: "Position mise à jour", position: foundUser.position });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -58,9 +75,7 @@ router.get('/me', auth, role("chauffeur"), async (req, res) => {
   }
 });
 
-
-
-// ← fetches User accounts with role "chauffeur" linked to this gerant
+// Fetches User accounts with role "chauffeur" linked to this gerant
 router.get('/my', auth, role("gerant"), async (req, res) => {
   try {
     const gerant = await User.findById(req.user.id);
@@ -82,7 +97,9 @@ router.delete('/:id', auth, role("gerant"), async (req, res) => {
     const chauffeur = await Chauffeur.findOne({ _id: req.params.id, gerant: req.user.id });
     if (!chauffeur) return res.status(404).json({ msg: "Chauffeur non trouvé" });
     await chauffeur.deleteOne();
-    await User.findByIdAndUpdate(req.user.id, { $pull: { 'gerantInfo.chauffeurs': chauffeur._id } });
+    await User.findByIdAndUpdate(req.user.id, {
+      $pull: { 'gerantInfo.chauffeurs': chauffeur._id }
+    });
     res.json({ msg: "Chauffeur supprimé" });
   } catch (err) {
     res.status(500).json({ msg: "Server error", error: err.message });
@@ -101,13 +118,14 @@ router.post('/join', auth, role("chauffeur"), async (req, res) => {
     const gerant = await User.findOne({ 'gerantInfo.code': code });
     if (!gerant) return res.status(404).json({ msg: "Code invalide" });
 
-    // Prevent duplicate
+    // Empêcher les doublons
     const alreadyJoined = gerant.gerantInfo.chauffeurs
       .map(id => id.toString())
       .includes(req.user.id.toString());
-    if (alreadyJoined) return res.status(400).json({ msg: "Vous avez déjà rejoint ce gérant" });
+    if (alreadyJoined) {
+      return res.status(400).json({ msg: "Vous avez déjà rejoint ce gérant" });
+    }
 
-    // Just link the chauffeur User ID to the gerant
     await User.findByIdAndUpdate(gerant._id, {
       $push: { 'gerantInfo.chauffeurs': req.user.id }
     });
