@@ -65,29 +65,28 @@ router.post("/register", async (req, res) => {
 
     // ✅ Send via EmailJS using One-Time Password template
    try {
- await axios.post('https://api.emailjs.com/api/v1.0/email/send', {
+await axios.post('https://api.emailjs.com/api/v1.0/email/send', {
   service_id:  process.env.EMAILJS_SERVICE_ID,
   template_id: process.env.EMAILJS_TEMPLATE_ID,
   user_id:     process.env.EMAILJS_PUBLIC_KEY,
   accessToken: process.env.EMAILJS_PRIVATE_KEY,
   template_params: {
-    email:email,
-    passcode:code,
-    time:timeStr,
-  },
+    email:    email,
+    passcode: code,
+    time:     timeStr,
+  }
+}, {
   headers: {
     'Content-Type': 'application/json',
-    'Origin': 'http://localhost/',   // ← ADD THIS — EmailJS blocks requests with no origin
+    'Origin': 'http://localhost/',
   }
 });
-console.log(` OTP sent to ${email}`);
 
 } catch (emailErr) {
-  console.error('❌ EmailJS error:', emailErr); // ✅ add this
-  // ✅ Still return success so user can proceed
-  // Email failed but user is created — don't block registration
+  console.error('❌ EmailJS status:', emailErr.response?.status);
+  console.error('❌ EmailJS data:', emailErr.response?.data);
+  console.error('❌ EmailJS message:', emailErr.message);
 }
-
 res.json({ msg: "Verification code sent", userId: user._id });
 
 
