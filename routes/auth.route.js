@@ -58,18 +58,26 @@ router.post("/register", async (req, res) => {
     await user.save();
 
     // ✅ Send via EmailJS using One-Time Password template
-    await emailjs.send(
-      process.env.EMAILJS_SERVICE_ID,   // service_n7ua47u
-      process.env.EMAILJS_TEMPLATE_ID,  // template_gtklore
-      {
-        email:    email,      // {{email}} — recipient
-        passcode: code,       // {{passcode}} — the 6-digit code
-        time:     timeStr,    // {{time}} — expiry time
-      }
-    );
+   try {
+  await emailjs.send(
+    process.env.EMAILJS_SERVICE_ID,
+    process.env.EMAILJS_TEMPLATE_ID,
+    {
+      email:    email,
+      passcode: code,
+      time:     timeStr,
+    }
+  );
+  console.log(` OTP sent to ${email}`);
 
-    console.log(`✅ OTP sent to ${email}`);
-    res.json({ msg: "Verification code sent", userId: user._id });
+} catch (emailErr) {
+  console.error('❌ EmailJS error:', emailErr); // ✅ add this
+  // ✅ Still return success so user can proceed
+  // Email failed but user is created — don't block registration
+}
+
+res.json({ msg: "Verification code sent", userId: user._id });
+
 
   } catch (err) {
     console.error('REGISTER error:', err.message);
