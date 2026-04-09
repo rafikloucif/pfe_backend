@@ -3,15 +3,14 @@ const User = require("../models/user");
 
 const router = express.Router();
 
-// Fournisseurs positions
+// Fournisseurs (chauffeurs) positions
+// ✅ FIXED: role "fournisseur" doesn't exist in the schema — correct role is "chauffeur"
 router.get("/fournisseurs/positions", async (req, res) => {
   try {
-
-    const fournisseurs = await User.find({ role: "fournisseur" })
-      .select("nom position");
+    const fournisseurs = await User.find({ role: "chauffeur", isOnline: true })
+      .select("nom prenom position fournisseurInfo vrpId");
 
     res.json(fournisseurs);
-
   } catch (err) {
     res.status(500).json({ msg: err.message });
   }
@@ -20,16 +19,13 @@ router.get("/fournisseurs/positions", async (req, res) => {
 // Clients positions
 router.get("/clients/positions", async (req, res) => {
   try {
-
     const clients = await User.find({ role: "client" })
       .select("nom position");
 
     res.json(clients);
-
   } catch (err) {
     res.status(500).json({ msg: err.message });
   }
 });
-
 
 module.exports = router;

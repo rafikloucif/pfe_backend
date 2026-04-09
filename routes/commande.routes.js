@@ -10,9 +10,6 @@ const router = express.Router();
 const VRP_API = process.env.VRP_API_URL || 'http://localhost:8000';
 
 // ─── Compteur d'ID VRP ────────────────────────────────────────────
-// Le backend Python utilise des entiers comme IDs de commandes.
-// On génère un ID unique en combinant timestamp + random pour éviter
-// les collisions même en cas de redémarrage du serveur.
 function genVrpId() {
   return Math.floor(Date.now() / 1000) % 100000 + Math.floor(Math.random() * 100);
 }
@@ -32,7 +29,6 @@ router.post('/add', auth, role("client"), async (req, res) => {
       return res.status(400).json({ msg: "La position (lat, lon) est obligatoire" });
     }
 
-    // Générer un ID VRP unique pour cette commande
     const vrpId = genVrpId();
 
     const commande = new Commande({
@@ -127,7 +123,6 @@ router.get('/:id/track', auth, async (req, res) => {
       return res.status(404).json({ msg: "Commande introuvable" });
     }
 
-    // fournisseur déjà populé — pas besoin d'une 2ème requête
     const fournisseur = commande.fournisseur;
 
     res.json({
@@ -160,7 +155,8 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("chauffeur"), async (r
       return res.status(404).json({ msg: "Not found" });
     }
 
-    if (chauffeur.fournisseur.toString() !== req.user.id) {
+    // ✅ FIXED: field is gerant not fournisseur on the Chauffeur model
+    if (chauffeur.gerant.toString() !== req.user.id) {
       return res.status(403).json({ msg: "Ce chauffeur ne vous appartient pas" });
     }
 
@@ -187,9 +183,7 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("chauffeur"), async (r
     await chauffeur.save();
 
     // ── Notifier le backend Python VRP ────────────────────────────
-    // Étape 1 : accepter la commande côté Python
-    // Étape 2 : insérer dynamiquement dans la solution (cheapest insertion + 2-opt)
-    // → c'est ce qui met à jour la map
+    let vrpData = null;
     if (commande.vrpId) {
       try {
         await axios.post(`${VRP_API}/commandes/accept`, {
@@ -198,7 +192,11 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("chauffeur"), async (r
         });
         console.log(`Commande ${commande.vrpId} acceptée côté VRP`);
 
-        await axios.post(`${VRP_API}/commandes/${commande.vrpId}/ajouter-dynamique`);
+        // ✅ FIXED: capture the response instead of discarding it
+        const vrpResponse = await axios.post(
+          `${VRP_API}/commandes/${commande.vrpId}/ajouter-dynamique`
+        );
+        vrpData = vrpResponse.data;
         console.log(`Commande ${commande.vrpId} insérée dans la solution VRP`);
       } catch (vrpErr) {
         console.warn(`VRP non notifié pour commande ${commande.vrpId} :`, vrpErr.message);
@@ -207,9 +205,11 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("chauffeur"), async (r
       console.warn(`Commande ${commande._id} sans vrpId — VRP non notifié`);
     }
 
+    // ✅ FIXED: vrp routes are now included in the response so Flutter gets them
     res.json({
       msg: "Commande assignée avec succès",
-      nouvelleQuantiteEau: fournisseur.fournisseurInfo.quantiteEau
+      nouvelleQuantiteEau: fournisseur.fournisseurInfo.quantiteEau,
+      vrp: vrpData  // contains distance_totale_km, desequilibre, valide
     });
   } catch (err) {
     console.error('PUT /assign error:', err.message);
@@ -225,7 +225,6 @@ router.put('/livree/:id', auth, role("chauffeur"), async (req, res) => {
       return res.status(404).json({ msg: "Commande introuvable" });
     }
 
-    // Vérifier que c'est bien le chauffeur assigné
     if (!commande.chauffeur || commande.chauffeur.toString() !== req.user.id) {
       return res.status(403).json({ msg: "Accès refusé" });
     }
@@ -246,7 +245,7 @@ router.put('/livree/:id', auth, role("chauffeur"), async (req, res) => {
 
 // ─── CANCEL COMMANDE ──────────────────────────────────────────────
 router.put('/cancel/:id', auth, async (req, res) => {
-  console.log('>>> cancel hit | role:', req.user.role, '| id:', req.user.id); // ← keep this
+  console.log('>>> cancel hit | role:', req.user.role, '| id:', req.user.id);
   try {
     const commande = await Commande.findById(req.params.id);
     if (!commande) {
@@ -256,13 +255,10 @@ router.put('/cancel/:id', auth, async (req, res) => {
     const userRole = req.user.role;
 
     if (userRole === 'client') {
-      // Client can only cancel their own order
       if (commande.client.toString() !== req.user.id) {
         return res.status(403).json({ msg: "Accès refusé" });
       }
     }
-    // ✅ gerant, fournisseur, chauffeur can all cancel any order
-    // (chauffeur here means the fournisseur-side user, not delivery driver)
 
     if (commande.status === 'livrée' || commande.status === 'annulée') {
       return res.status(400).json({ msg: "Impossible d'annuler cette commande" });
@@ -285,4 +281,19 @@ router.put('/cancel/:id', auth, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ─── GET VRP SOLUTION (passthrough for Flutter) ───────────────────
+// ✅ NEW: Flutter can call GET /api/commandes/solution to fetch the
+// current optimised routes at any time (e.g. to refresh the map).
+router.get('/solution', auth, async (req, res) => {
+  try {
+    const response = await axios.get(`${VRP_API}/optimisation/solution`);
+    res.json(response.data);
+  } catch (err) {
+    console.error('GET /solution error:', err.message);
+    const status = err.response?.status || 502;
+    res.status(status).json({ msg: "Erreur VRP", error: err.response?.data || err.message });
+  }
+});
+
 module.exports = router;

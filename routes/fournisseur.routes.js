@@ -6,11 +6,10 @@ const role = require('../middleware/role');
 const User = require('../models/user');
 const Chauffeur = require('../models/chauffeur');
 
-const VRP_API =  'http://localhost:8000';
+// ✅ FIXED: was hardcoded to localhost, now uses env var
+const VRP_API = process.env.VRP_API_URL || 'http://localhost:8000';
 
 // ─── Génération d'un vrpId unique ────────────────────────────────
-// Même logique que pour les commandes — entier court, unique,
-// compatible avec le backend Python qui attend des IDs entiers.
 function genVrpId() {
   return Math.floor(Date.now() / 1000) % 100000 + Math.floor(Math.random() * 100);
 }
@@ -36,8 +35,6 @@ router.post('/add-info', auth, role("chauffeur"), async (req, res) => {
 });
 
 // ─── UPDATE POSITION ─────────────────────────────────────────────
-// Notifie le backend Python pour mettre à jour la matrice de
-// distances avec la nouvelle position du chauffeur.
 router.put('/position', auth, role("chauffeur"), async (req, res) => {
   try {
     const { lat, lon } = req.body;
@@ -55,7 +52,6 @@ router.put('/position', auth, role("chauffeur"), async (req, res) => {
       { new: true }
     );
 
-    // Notifier le VRP Python avec le vrpId du chauffeur
     if (foundUser.vrpId) {
       try {
         await axios.put(`${VRP_API}/conducteurs/${foundUser.vrpId}/position`, { lat, lon });
@@ -148,22 +144,19 @@ router.post('/join', auth, role("chauffeur"), async (req, res) => {
       $push: { 'gerantInfo.chauffeurs': req.user.id }
     });
 
-    // Générer et assigner un vrpId au chauffeur s'il n'en a pas encore
-    // puis l'enregistrer dans le backend Python
     const chauffeurUser = await User.findById(req.user.id);
     if (!chauffeurUser.vrpId) {
       const vrpId = genVrpId();
       chauffeurUser.vrpId = vrpId;
       await chauffeurUser.save();
 
-      // Enregistrer le chauffeur dans le VRP
       try {
         await axios.post(`${VRP_API}/setup/conducteurs`, {
           conducteurs: [{
             id: vrpId,
             lat: chauffeurUser.position?.lat || 36.7538,
             lon: chauffeurUser.position?.lon || 3.0588,
-            capacity: 1000,
+            capacity: chauffeurUser.fournisseurInfo?.quantiteEau || 1000,
             nom: `${chauffeurUser.nom || ''} ${chauffeurUser.prenom || ''}`.trim()
           }]
         });
