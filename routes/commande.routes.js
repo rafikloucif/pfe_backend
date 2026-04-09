@@ -246,32 +246,23 @@ router.put('/livree/:id', auth, role("chauffeur"), async (req, res) => {
 
 // ─── CANCEL COMMANDE ──────────────────────────────────────────────
 router.put('/cancel/:id', auth, async (req, res) => {
+  console.log('>>> cancel hit | role:', req.user.role, '| id:', req.user.id); // ← keep this
   try {
     const commande = await Commande.findById(req.params.id);
     if (!commande) {
       return res.status(404).json({ msg: "Commande introuvable" });
     }
 
-    const role = req.user.role;
+    const userRole = req.user.role;
 
-    // ✅ All 4 roles handled explicitly
-    if (role === 'client') {
+    if (userRole === 'client') {
+      // Client can only cancel their own order
       if (commande.client.toString() !== req.user.id) {
         return res.status(403).json({ msg: "Accès refusé" });
       }
-    } else if (role === 'chauffeur') {
-      if (commande.chauffeur?.toString() !== req.user.id) {
-        return res.status(403).json({ msg: "Accès refusé" });
-      }
-      if (commande.status === 'en livraison') {
-        return res.status(400).json({ msg: "Impossible d'annuler une commande en cours de livraison" });
-      }
-    } else if (role === 'gerant' ||  role === 'fournisseur') {
-      // ✅ Both gerant and fournisseur can cancel anything
-      // no restriction needed
-    } else {
-      return res.status(403).json({ msg: "Accès refusé" });
     }
+    // ✅ gerant, fournisseur, chauffeur can all cancel any order
+    // (chauffeur here means the fournisseur-side user, not delivery driver)
 
     if (commande.status === 'livrée' || commande.status === 'annulée') {
       return res.status(400).json({ msg: "Impossible d'annuler cette commande" });
@@ -294,5 +285,4 @@ router.put('/cancel/:id', auth, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 module.exports = router;
