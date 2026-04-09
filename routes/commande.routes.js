@@ -245,31 +245,36 @@ router.put('/livree/:id', auth, role("chauffeur"), async (req, res) => {
 });
 
 // ─── CANCEL COMMANDE ──────────────────────────────────────────────
-router.put('/cancel/:id', auth, role("client", "gerant", "chauffeur"), async (req, res) => {
+router.put('/cancel/:id', auth, async (req, res) => {
   try {
     const commande = await Commande.findById(req.params.id);
     if (!commande) {
       return res.status(404).json({ msg: "Commande introuvable" });
     }
 
-    const isClient   = req.user.role === "client"   && commande.client.toString()   === req.user.id;
-    const isGerant   = req.user.role === "gerant";
-    const isChauffeur = req.user.role === "chauffeur" && commande.chauffeur?.toString() === req.user.id;
+    // ✅ Each role can only cancel what belongs to them
+    const role = req.user.role;
 
-    if (!isClient && !isGerant && !isChauffeur) {
-      return res.status(403).json({ msg: "Accès refusé" });
+    if (role === 'client') {
+      if (commande.client.toString() !== req.user.id) {
+        return res.status(403).json({ msg: "Accès refusé" });
+      }
+    } else if (role === 'chauffeur') {
+      if (commande.chauffeur?.toString() !== req.user.id) {
+        return res.status(403).json({ msg: "Accès refusé" });
+      }
+      if (commande.status === 'en livraison') {
+        return res.status(400).json({ msg: "Impossible d'annuler une commande en cours de livraison" });
+      }
     }
+    // gerant can cancel anything — no extra check needed
 
-    if (commande.status === "livrée" || commande.status === "annulée") {
+    if (commande.status === 'livrée' || commande.status === 'annulée') {
       return res.status(400).json({ msg: "Impossible d'annuler cette commande" });
     }
 
-    // Chauffeur can only cancel if order is not yet in delivery
-    if (req.user.role === "chauffeur" && commande.status === "en livraison") {
-      return res.status(400).json({ msg: "Impossible d'annuler une commande en cours de livraison" });
-    }
-
-    if (commande.status === "en livraison" && commande.chauffeur) {
+    // Free up chauffeur if was assigned
+    if (commande.status === 'en livraison' && commande.chauffeur) {
       const chauffeur = await Chauffeur.findById(commande.chauffeur);
       if (chauffeur) {
         chauffeur.disponible = true;
@@ -277,8 +282,9 @@ router.put('/cancel/:id', auth, role("client", "gerant", "chauffeur"), async (re
       }
     }
 
-    commande.status = "annulée";
+    commande.status = 'annulée';
     await commande.save();
+
     res.json({ msg: "Commande annulée avec succès" });
   } catch (err) {
     console.error('PUT /cancel error:', err.message);
