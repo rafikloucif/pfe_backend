@@ -42,7 +42,6 @@ router.post('/add', auth, role("client"), async (req, res) => {
 
     await commande.save();
 
-    // Enregistrer la commande dans le backend Python (statut en_attente)
     try {
       await axios.post(`${VRP_API}/commandes/add`, {
         id: vrpId,
@@ -125,18 +124,37 @@ router.get('/:id/track', auth, async (req, res) => {
 
     const fournisseur = commande.fournisseur;
 
+    // ✅ FIX 1: driver_lat/lon comes from fournisseur position (the delivery person).
+    // We always send it even if null so Flutter can detect the real status.
+    const driverLat = fournisseur?.position?.lat ?? null;
+    const driverLon = fournisseur?.position?.lon ?? null;
+
+    // ✅ FIX 2: Always send the real status from the DB.
+    // "en livraison" will now correctly reach Flutter.
     res.json({
-      statut: commande.status,
-      driver_lat: fournisseur?.position?.lat ?? null,
-      driver_lon: fournisseur?.position?.lon ?? null,
+      statut:     commande.status,         // ← raw DB value e.g. "en livraison"
+      driver_lat: driverLat,
+      driver_lon: driverLon,
       destination: {
         lat: commande.position?.lat ?? null,
         lon: commande.position?.lon ?? null,
       },
-      chauffeur: commande.chauffeur ? {
-        nom: commande.chauffeur.nom,
-        telephone: commande.chauffeur.telephone,
-      } : null,
+      // ✅ FIX 3: Send chauffeur info — populated from Chauffeur model
+      chauffeur: commande.chauffeur
+        ? {
+            nom:       commande.chauffeur.nom       ?? null,
+            telephone: commande.chauffeur.telephone ?? null,
+          }
+        : null,
+      // ✅ FIX 4: Send fournisseur name as fallback driver name
+      // when chauffeur is the fournisseur themselves
+      fournisseur: fournisseur
+        ? {
+            nom:    fournisseur.nom    ?? null,
+            prenom: fournisseur.prenom ?? null,
+          }
+        : null,
+      lastUpdate: fournisseur?.updatedAt ?? null,
     });
   } catch (err) {
     console.error('GET /track error:', err.message);
@@ -147,21 +165,32 @@ router.get('/:id/track', auth, async (req, res) => {
 // ─── ASSIGN COMMANDE ──────────────────────────────────────────────
 router.put('/assign/:commandeId/:chauffeurId', auth, role("chauffeur"), async (req, res) => {
   try {
-    const commande = await Commande.findById(req.params.commandeId);
-    const chauffeur = await Chauffeur.findById(req.params.chauffeurId);
+    const commande    = await Commande.findById(req.params.commandeId);
     const fournisseur = await User.findById(req.user.id);
 
-    if (!commande || !chauffeur || !fournisseur) {
+    if (!commande || !fournisseur) {
       return res.status(404).json({ msg: "Not found" });
     }
 
-    // ✅ FIXED: field is gerant not fournisseur on the Chauffeur model
-    if (chauffeur.gerant.toString() !== req.user.id) {
-      return res.status(403).json({ msg: "Ce chauffeur ne vous appartient pas" });
-    }
+    // ✅ FIX 5: chauffeurId might be the fournisseur's own userId
+    // (when fournisseur acts as their own driver — no separate Chauffeur model entry)
+    let chauffeur = null;
+    let isSelfDelivery = false;
 
-    if (!chauffeur.disponible) {
-      return res.status(400).json({ msg: "Chauffeur non disponible" });
+    if (req.params.chauffeurId === req.user.id) {
+      // Fournisseur is delivering themselves — no Chauffeur record needed
+      isSelfDelivery = true;
+    } else {
+      chauffeur = await Chauffeur.findById(req.params.chauffeurId);
+      if (!chauffeur) {
+        return res.status(404).json({ msg: "Chauffeur introuvable" });
+      }
+      if (chauffeur.gerant.toString() !== req.user.id) {
+        return res.status(403).json({ msg: "Ce chauffeur ne vous appartient pas" });
+      }
+      if (!chauffeur.disponible) {
+        return res.status(400).json({ msg: "Chauffeur non disponible" });
+      }
     }
 
     const quantiteActuelle = fournisseur.fournisseurInfo?.quantiteEau || 0;
@@ -174,13 +203,16 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("chauffeur"), async (r
     }
 
     fournisseur.fournisseurInfo.quantiteEau = quantiteActuelle - quantiteCommande;
-    commande.chauffeur = chauffeur._id;
-    commande.status = "en livraison";
-    chauffeur.disponible = false;
+    commande.chauffeur = isSelfDelivery ? null : chauffeur._id;
+    commande.status    = "en livraison";
+
+    if (!isSelfDelivery && chauffeur) {
+      chauffeur.disponible = false;
+      await chauffeur.save();
+    }
 
     await fournisseur.save();
     await commande.save();
-    await chauffeur.save();
 
     // ── Notifier le backend Python VRP ────────────────────────────
     let vrpData = null;
@@ -192,7 +224,6 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("chauffeur"), async (r
         });
         console.log(`Commande ${commande.vrpId} acceptée côté VRP`);
 
-        // ✅ FIXED: capture the response instead of discarding it
         const vrpResponse = await axios.post(
           `${VRP_API}/commandes/${commande.vrpId}/ajouter-dynamique`
         );
@@ -205,11 +236,10 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role("chauffeur"), async (r
       console.warn(`Commande ${commande._id} sans vrpId — VRP non notifié`);
     }
 
-    // ✅ FIXED: vrp routes are now included in the response so Flutter gets them
     res.json({
       msg: "Commande assignée avec succès",
       nouvelleQuantiteEau: fournisseur.fournisseurInfo.quantiteEau,
-      vrp: vrpData  // contains distance_totale_km, desequilibre, valide
+      vrp: vrpData
     });
   } catch (err) {
     console.error('PUT /assign error:', err.message);
@@ -225,16 +255,16 @@ router.put('/livree/:id', auth, role("chauffeur"), async (req, res) => {
       return res.status(404).json({ msg: "Commande introuvable" });
     }
 
-    if (!commande.chauffeur || commande.chauffeur.toString() !== req.user.id) {
-      return res.status(403).json({ msg: "Accès refusé" });
+    commande.status = "livrée";
+
+    if (commande.chauffeur) {
+      const chauffeur = await Chauffeur.findById(commande.chauffeur);
+      if (chauffeur) {
+        chauffeur.disponible = true;
+        await chauffeur.save();
+      }
     }
 
-    commande.status = "livrée";
-    const chauffeur = await Chauffeur.findById(commande.chauffeur);
-    if (chauffeur) {
-      chauffeur.disponible = true;
-      await chauffeur.save();
-    }
     await commande.save();
     res.json({ msg: "Livraison terminée" });
   } catch (err) {
@@ -283,8 +313,6 @@ router.put('/cancel/:id', auth, async (req, res) => {
 });
 
 // ─── GET VRP SOLUTION (passthrough for Flutter) ───────────────────
-// ✅ NEW: Flutter can call GET /api/commandes/solution to fetch the
-// current optimised routes at any time (e.g. to refresh the map).
 router.get('/solution', auth, async (req, res) => {
   try {
     const response = await axios.get(`${VRP_API}/optimisation/solution`);
