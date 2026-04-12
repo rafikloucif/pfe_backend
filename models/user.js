@@ -18,6 +18,11 @@ verified: { type: Boolean, default: false },
   verificationCode: { type: String, default: null },
   verificationCodeExpires: { type: Date, default: null },
 
+  secondaryRole: {
+  type: String,
+  enum: ['chauffeur'],
+  default: null
+},
 
 
   position: {
