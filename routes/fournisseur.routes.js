@@ -172,4 +172,22 @@ router.post('/join', auth, role("chauffeur"), async (req, res) => {
   }
 });
 
+
+router.put('/quantite-eau', auth, role("chauffeur"), async (req, res) => {
+  try {
+    const { quantiteEau } = req.body;
+    if (quantiteEau == null) {
+      return res.status(400).json({ error: "quantiteEau est obligatoire" });
+    }
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { 'fournisseurInfo.quantiteEau': Number(quantiteEau) },
+      { new: true }
+    ).select('-password');
+    res.json({ msg: "Quantité mise à jour", fournisseurInfo: user.fournisseurInfo });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
