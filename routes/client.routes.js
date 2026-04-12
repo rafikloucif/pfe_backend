@@ -7,10 +7,11 @@ const User = require("../models/user");
 // GET ALL FOURNISSEURS
 router.get("/fournisseurs", auth, role("client"), async (req, res) => {
   try {
-    // ✅ Just filter by role — no fournisseurInfo check
     const fournisseurs = await User.find({
-      role: "chauffeur",
-      secondaryRole:"chauffeur",
+      $or: [
+        { role: "chauffeur" },
+        { secondaryRole: "chauffeur" }
+      ],
       isOnline: true
     }).select("-password");
 
@@ -20,7 +21,6 @@ router.get("/fournisseurs", auth, role("client"), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 // UPDATE CLIENT POSITION
 router.put("/position", auth, role("client"), async (req, res) => {
