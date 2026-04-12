@@ -77,6 +77,7 @@ router.post('/add', auth, role('client'), async (req, res) => {
       vrpId,
     });
     await commande.save();
+    res.json(commande);
 
     // Register in Python VRP (non-blocking — failure is logged, not fatal)
     try {
