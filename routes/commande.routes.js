@@ -7,7 +7,7 @@ const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const router = express.Router();
 
-const VRP_API = process.env.VRP_API_URL || 'http://localhost:8000';
+const VRP_API =  'https://pfebackendpython.onrender.com/';
 
 // ─── VRP ID generator ─────────────────────────────────────────────
 function genVrpId() {

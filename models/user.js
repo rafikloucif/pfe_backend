@@ -5,7 +5,6 @@ const userSchema = new mongoose.Schema({
   prenom:    { type: String, required: true },
   telephone: { type: String, required: true },  // ✅ add — used in register
   email:     { type: String, required: true, unique: true },
-  adresse:   { type: String, required: true},  // ✅ add — used in register
   password:  { type: String, required: true },
   role: {
     type: String,

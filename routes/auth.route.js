@@ -20,7 +20,7 @@ router.post("/register", async (req, res) => {
    });
   try {
     console.log('REGISTER body:', req.body);
-    const { nom, prenom, telephone, email, password, adresse } = req.body;
+    const { nom, prenom, telephone, email, password } = req.body;
 
     if (!validator.isEmail(email)) {
       return res.status(400).json({ msg: "Invalid email" });
@@ -30,7 +30,7 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ msg: "Only Gmail allowed" });
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       return res.status(400).json({ msg: "Password must be at least 6 characters" });
     }
 
@@ -55,7 +55,6 @@ router.post("/register", async (req, res) => {
       telephone,
       email,
       password: hashedPassword,
-      adresse,
       verified: false,
       verificationCode: code,
       verificationCodeExpires: Date.now() + 10 * 60 * 1000,
