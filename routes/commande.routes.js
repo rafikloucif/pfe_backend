@@ -7,14 +7,14 @@ const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const router = express.Router();
 
-const VRP_API =  process.env.VRP_API_URL || 'https://pfebackendpython.onrender.com';
+const VRP_API = process.env.VRP_API_URL || 'https://pfebackendpython.onrender.com';
 
 // ─── VRP ID generator ─────────────────────────────────────────────
 function genVrpId() {
   return Math.floor(Date.now() / 1000) % 100000 + Math.floor(Math.random() * 100);
 }
 
-// ─── Helper: safe axios POST with timeout ─────────────────────────
+// ─── Helper: safe axios calls with timeout ────────────────────────
 async function vrpPost(path, body = {}) {
   const resp = await axios.post(`${VRP_API}${path}`, body, { timeout: 15000 });
   return resp.data;
@@ -25,24 +25,25 @@ async function vrpGet(path) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// SETUP  —  Push driver positions to Python so it can build its
-//           distance matrix BEFORE any commande is processed.
+// SETUP — Push driver positions to Python so it can build its
+//         distance matrix BEFORE any commande is processed.
 //
-// Call this once when the fournisseur goes online, or call it
-// automatically before the first /assign (see below).
+// FIX: correct endpoint is /setup/conducteurs (not /setup)
+//      correct body key is  conducteurs       (not chauffeurs)
 //
 // POST /api/commandes/setup
-// Body: { chauffeurs: [{id, lat, lon, capacity}], ref_lat, ref_lon }
 // ─────────────────────────────────────────────────────────────────
 router.post('/setup', auth, role('chauffeur'), async (req, res) => {
   try {
-    const { chauffeurs, ref_lat, ref_lon } = req.body;
-    if (!chauffeurs || !ref_lat || !ref_lon) {
-      return res.status(400).json({ msg: 'chauffeurs, ref_lat, ref_lon requis' });
+    const { chauffeurs } = req.body;
+    if (!chauffeurs || !Array.isArray(chauffeurs) || chauffeurs.length === 0) {
+      return res.status(400).json({ msg: 'chauffeurs[] requis' });
     }
 
-    const data = await vrpPost('/setup', { chauffeurs, ref_lat, ref_lon });
-    console.log('VRP /setup OK:', data);
+    // app.py SetupConducteursBody expects: { conducteurs: [...] }
+    // ref_lat / ref_lon are module-level constants in Python — not sent here
+    const data = await vrpPost('/setup/conducteurs', { conducteurs: chauffeurs });
+    console.log('[VRP] /setup/conducteurs OK:', data);
     res.json({ msg: 'VRP initialisé', vrp: data });
   } catch (err) {
     console.error('POST /setup error:', err.message);
@@ -52,7 +53,11 @@ router.post('/setup', auth, role('chauffeur'), async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────
 // CLIENT ADD COMMANDE
-// Also registers the order in Python VRP memory immediately.
+// Saves to MongoDB then registers in Python VRP (non-blocking).
+//
+// FIX: removed duplicate res.json(commande) call that crashed Node.js
+//      ("Cannot set headers after they are sent")
+//
 // POST /api/commandes/add
 // ─────────────────────────────────────────────────────────────────
 router.post('/add', auth, role('client'), async (req, res) => {
@@ -77,23 +82,21 @@ router.post('/add', auth, role('client'), async (req, res) => {
       vrpId,
     });
     await commande.save();
+
+    // FIX: only ONE res.json — send immediately, then notify Python after
     res.json(commande);
 
-    // Register in Python VRP (non-blocking — failure is logged, not fatal)
-    try {
-      await vrpPost('/commandes/add', {
-        id:          vrpId,
-        lat,
-        lon,
-        demand:      capacite,
-        description: `${capacite}L`,
-      });
-      console.log(`[VRP] Commande ${vrpId} enregistrée`);
-    } catch (vrpErr) {
-      console.warn(`[VRP] /commandes/add non notifié (${vrpId}):`, vrpErr.message);
-    }
+    // Non-blocking VRP registration (runs after response is sent)
+    vrpPost('/commandes/add', {
+      id:          vrpId,
+      lat,
+      lon,
+      demand:      capacite,
+      description: `${capacite}L`,
+    })
+      .then(() => console.log(`[VRP] Commande ${vrpId} enregistrée`))
+      .catch(e  => console.warn(`[VRP] /commandes/add non notifié (${vrpId}):`, e.message));
 
-    res.json(commande);
   } catch (err) {
     console.error('POST /add error:', err.message);
     res.status(500).json({ error: err.message });
@@ -166,7 +169,7 @@ router.get('/:id/track', auth, async (req, res) => {
     const commande = await Commande.findById(req.params.id)
       .populate('client', '-password')
       .populate('chauffeur')
-      .populate('fournisseur', 'nom prenom position isOnline');
+      .populate('fournisseur', 'nom prenom position isOnline updatedAt');
 
     if (!commande) return res.status(404).json({ msg: 'Commande introuvable' });
 
@@ -194,17 +197,16 @@ router.get('/:id/track', auth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// ASSIGN COMMANDE  ← main route that triggers VRP
+// ASSIGN COMMANDE ← main route that triggers the full VRP pipeline
 //
-// Full sequence:
+// Sequence:
 //   1. Validate stock
-//   2. Save to MongoDB (status → "en livraison")
-//   3. VRP /setup  (send driver positions so Python has a distance matrix)
-//   4. VRP /commandes/add  (register commande if not already done)
-//   5. VRP /commandes/accept  (mark as accepted in Python state)
-//   6. VRP /commandes/:vrpId/ajouter-dynamique  (cheapest-insert + 2-opt)
-//   7. VRP /optimisation/optimiser  (run full NSGA-II)
-//   8. Return result including VRP routes
+//   2. Save to MongoDB  (status → "en livraison")
+//   3. Python /setup/conducteurs   — send driver positions (FIX: was /setup)
+//   4. Python /commandes/add       — register commande
+//   5. Python /commandes/accept    — mark accepted; app.py runs NSGA-II here
+//   6. Python /commandes/:id/ajouter-dynamique — cheapest-insert + 2-opt
+//   7. Python /optimize            — final NSGA-II pass  (FIX: was /optimisation/optimiser)
 //
 // PUT /api/commandes/assign/:commandeId/:chauffeurId
 // ─────────────────────────────────────────────────────────────────
@@ -217,7 +219,7 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
       return res.status(404).json({ msg: 'Not found' });
 
     // ── Driver resolution ────────────────────────────────────────
-    let chauffeur    = null;
+    let chauffeur      = null;
     let isSelfDelivery = false;
 
     if (req.params.chauffeurId === req.user.id) {
@@ -255,11 +257,9 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
     let vrpData = null;
 
     try {
-      // STEP 3 — Setup: send all drivers + fournisseur position to Python
-      // so it can build the distance matrix before doing anything else.
+      // STEP 3 — build driver list, then send to Python
       const allChauffeurs = await Chauffeur.find({ gerant: req.user.id });
 
-      // Build driver list: real chauffeurs + fournisseur as fallback driver
       const driverList = allChauffeurs.map(c => ({
         id:       c._id.toString(),
         lat:      c.position?.lat ?? fournisseur.position?.lat ?? 0,
@@ -268,7 +268,6 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
         nom:      c.nom ?? 'Chauffeur',
       }));
 
-      // If self-delivery or no separate drivers, add fournisseur as driver
       if (driverList.length === 0 || isSelfDelivery) {
         driverList.push({
           id:       req.user.id,
@@ -279,15 +278,12 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
         });
       }
 
-      await vrpPost('/setup', {
-        chauffeurs: driverList,
-        ref_lat:    fournisseur.position?.lat ?? 36.7372,
-        ref_lon:    fournisseur.position?.lon ?? 3.0865,
-      });
-      console.log(`[VRP] /setup OK — ${driverList.length} conducteurs`);
+      // FIX: /setup/conducteurs + body key "conducteurs" (not "chauffeurs")
+      await vrpPost('/setup/conducteurs', { conducteurs: driverList });
+      console.log(`[VRP] /setup/conducteurs OK — ${driverList.length} conducteurs`);
 
       if (commande.vrpId) {
-        // STEP 4 — Register the commande in Python (idempotent — safe to call again)
+        // STEP 4 — register commande (idempotent)
         try {
           await vrpPost('/commandes/add', {
             id:     commande.vrpId,
@@ -297,35 +293,35 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
           });
           console.log(`[VRP] /commandes/add OK (${commande.vrpId})`);
         } catch (e) {
-          // Already registered from /add — not fatal
           console.log(`[VRP] /commandes/add skipped (already exists): ${e.message}`);
         }
 
-        // STEP 5 — Mark as accepted
+        // STEP 5 — accept → app.py runs NSGA-II internally here
         await vrpPost('/commandes/accept', {
           commande_id: commande.vrpId,
           action:      'accepter',
         });
-        console.log(`[VRP] /commandes/accept OK (${commande.vrpId})`);
+        console.log(`[VRP] /commandes/accept OK — NSGA-II ran (${commande.vrpId})`);
 
-        // STEP 6 — Cheapest insert + 2-opt (live, fast)
+        // STEP 6 — cheapest insert + 2-opt on the affected route
         const insertResult = await vrpPost(
           `/commandes/${commande.vrpId}/ajouter-dynamique`
         );
         console.log(`[VRP] ajouter-dynamique OK:`, insertResult);
 
-        // STEP 7 — Full NSGA-II optimization over all accepted commandes
-        // This is the actual multi-objective genetic algorithm from vrp.py
-        const optimResult = await vrpPost('/optimisation/optimiser', {});
-        console.log(`[VRP] NSGA-II OK — distance: ${optimResult.distance_totale_km} km`);
+        // STEP 7 — final full NSGA-II pass over merged solution
+        // FIX: correct endpoint is /optimize (alias in app.py)
+        //      /optimisation/optimiser is an internal router path → 404
+        const optimResult = await vrpPost('/optimize', {});
+        console.log(`[VRP] NSGA-II final OK — ${optimResult.distance_totale_km} km`);
 
         vrpData = optimResult;
       } else {
         console.warn(`[VRP] Commande ${commande._id} sans vrpId — VRP sauté`);
       }
     } catch (vrpErr) {
-      // VRP errors are non-fatal: delivery is already saved in MongoDB.
-      // Flutter will fall back to haversine nearest-neighbour on the map.
+      // VRP errors are non-fatal — MongoDB delivery already saved.
+      // Flutter falls back to nearest-neighbour on the map.
       console.warn('[VRP] pipeline error (non-fatal):', vrpErr.message);
     }
 
@@ -403,7 +399,7 @@ router.put('/cancel/:id', auth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// GET VRP SOLUTION  — passthrough to Python, called by Flutter map
+// GET VRP SOLUTION — passthrough to Python, called by Flutter map
 // GET /api/commandes/solution
 // ─────────────────────────────────────────────────────────────────
 router.get('/solution', auth, async (req, res) => {
@@ -420,12 +416,14 @@ router.get('/solution', auth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// MANUAL OPTIMIZE  — trigger NSGA-II at any time
+// MANUAL OPTIMIZE — trigger NSGA-II at any time (AppBar button)
 // POST /api/commandes/optimize
+//
+// FIX: correct endpoint is /optimize (not /optimisation/optimiser)
 // ─────────────────────────────────────────────────────────────────
 router.post('/optimize', auth, role('chauffeur'), async (req, res) => {
   try {
-    const data = await vrpPost('/optimisation/optimiser', {});
+    const data = await vrpPost('/optimize', {});
     console.log('[VRP] manual optimize OK:', data);
     res.json(data);
   } catch (err) {
