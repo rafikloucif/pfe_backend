@@ -10,7 +10,7 @@ const auth = require('./middleware/auth');
 
 const app = express();
 
-const VRP_API = process.env.VRP_API_URL || 'http://localhost:8000';
+const VRP_API = process.env.VRP_API_URL || 'https://pfebackendpython.onrender.com';
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
