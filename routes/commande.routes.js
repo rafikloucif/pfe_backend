@@ -272,9 +272,13 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
       }
 
       // /setup/conducteurs — body key must be "conducteurs"
-      await vrpPost('/setup/conducteurs', { conducteurs: driverList });
-      console.log(`[VRP] /setup/conducteurs OK — ${driverList.length} conducteurs`);
+      const setupResp = await vrpPost('/setup/conducteurs', { conducteurs: driverList });
 
+if (!setupResp || setupResp.error) {
+  throw new Error("VRP setup failed");
+}
+
+console.log(`[VRP] /setup OK — ${driverList.length} conducteurs`);
       if (commande.vrpId) {
         // STEP 4 — register commande (idempotent)
         try {
@@ -283,6 +287,7 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
             lat:    commande.position?.lat,
             lon:    commande.position?.lon,
             demand: commande.capacite,
+            gain:   commande.prix
           });
           console.log(`[VRP] /commandes/add OK (${commande.vrpId})`);
         } catch (e) {
