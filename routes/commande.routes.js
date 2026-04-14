@@ -255,9 +255,9 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
 
       const driverList = allChauffeurs.map(c => ({
         id:       c._id.toString(),
+        capacity: c.capacity ?? 1000,        
         lat:      c.position?.lat ?? fournisseur.position?.lat ?? 0,
         lon:      c.position?.lon ?? fournisseur.position?.lon ?? 0,
-        capacity: c.capacity ?? 1000,
         nom:      c.nom ?? 'Chauffeur',
       }));
 
