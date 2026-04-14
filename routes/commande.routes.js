@@ -223,8 +223,7 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
         return res.status(404).json({ msg: 'Chauffeur introuvable' });
       if (chauffeur.gerant.toString() !== req.user.id)
         return res.status(403).json({ msg: "Ce chauffeur ne vous appartient pas" });
-      if (!chauffeur.disponible)
-        return res.status(400).json({ msg: 'Chauffeur non disponible' });
+      
     }
 
     // ── Stock check ──────────────────────────────────────────────
@@ -239,10 +238,6 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
     commande.chauffeur = isSelfDelivery ? null : chauffeur._id;
     commande.status    = 'en livraison';
 
-    if (!isSelfDelivery && chauffeur) {
-      chauffeur.disponible = false;
-      await chauffeur.save();
-    }
     await fournisseur.save();
     await commande.save();
 
@@ -352,16 +347,23 @@ router.put('/livree/:id', auth, role('chauffeur'), async (req, res) => {
     if (!commande) return res.status(404).json({ msg: 'Commande introuvable' });
 
     commande.status = 'livrée';
+    await commande.save();
 
     if (commande.chauffeur) {
-      const chauffeur = await Chauffeur.findById(commande.chauffeur);
-      if (chauffeur) {
-        chauffeur.disponible = true;
-        await chauffeur.save();
+      // ✅ Only free chauffeur when ALL his commandes are delivered
+      const remaining = await Commande.countDocuments({
+        chauffeur: commande.chauffeur,
+        status:    'en livraison',
+      });
+      if (remaining === 0) {
+        const chauffeur = await Chauffeur.findById(commande.chauffeur);
+        if (chauffeur) {
+          chauffeur.disponible = true;
+          await chauffeur.save();
+        }
       }
     }
 
-    await commande.save();
     res.json({ msg: 'Livraison terminée' });
   } catch (err) {
     console.error('PUT /livree error:', err.message);
