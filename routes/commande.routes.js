@@ -28,9 +28,6 @@ async function vrpGet(path) {
 // SETUP — Push driver positions to Python so it can build its
 //         distance matrix BEFORE any commande is processed.
 //
-// FIX: correct endpoint is /setup/conducteurs (not /setup)
-//      correct body key is  conducteurs       (not chauffeurs)
-//
 // POST /api/commandes/setup
 // ─────────────────────────────────────────────────────────────────
 router.post('/setup', auth, role('chauffeur'), async (req, res) => {
@@ -41,7 +38,6 @@ router.post('/setup', auth, role('chauffeur'), async (req, res) => {
     }
 
     // app.py SetupConducteursBody expects: { conducteurs: [...] }
-    // ref_lat / ref_lon are module-level constants in Python — not sent here
     const data = await vrpPost('/setup/conducteurs', { conducteurs: chauffeurs });
     console.log('[VRP] /setup/conducteurs OK:', data);
     res.json({ msg: 'VRP initialisé', vrp: data });
@@ -54,9 +50,6 @@ router.post('/setup', auth, role('chauffeur'), async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 // CLIENT ADD COMMANDE
 // Saves to MongoDB then registers in Python VRP (non-blocking).
-//
-// FIX: removed duplicate res.json(commande) call that crashed Node.js
-//      ("Cannot set headers after they are sent")
 //
 // POST /api/commandes/add
 // ─────────────────────────────────────────────────────────────────
@@ -83,10 +76,9 @@ router.post('/add', auth, role('client'), async (req, res) => {
     });
     await commande.save();
 
-    // FIX: only ONE res.json — send immediately, then notify Python after
+    // Send response immediately, then notify Python after (non-blocking)
     res.json(commande);
 
-    // Non-blocking VRP registration (runs after response is sent)
     vrpPost('/commandes/add', {
       id:          vrpId,
       lat,
@@ -202,11 +194,12 @@ router.get('/:id/track', auth, async (req, res) => {
 // Sequence:
 //   1. Validate stock
 //   2. Save to MongoDB  (status → "en livraison")
-//   3. Python /setup/conducteurs   — send driver positions (FIX: was /setup)
+//   3. Python /setup/conducteurs   — send driver positions
 //   4. Python /commandes/add       — register commande
 //   5. Python /commandes/accept    — mark accepted; app.py runs NSGA-II here
 //   6. Python /commandes/:id/ajouter-dynamique — cheapest-insert + 2-opt
-//   7. Python /optimize            — final NSGA-II pass  (FIX: was /optimisation/optimiser)
+//   7. Python /optimize            — final NSGA-II pass
+//   8. Cache optimResult in MongoDB (vrpResult field) ← NEW
 //
 // PUT /api/commandes/assign/:commandeId/:chauffeurId
 // ─────────────────────────────────────────────────────────────────
@@ -278,7 +271,7 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
         });
       }
 
-      // FIX: /setup/conducteurs + body key "conducteurs" (not "chauffeurs")
+      // /setup/conducteurs — body key must be "conducteurs"
       await vrpPost('/setup/conducteurs', { conducteurs: driverList });
       console.log(`[VRP] /setup/conducteurs OK — ${driverList.length} conducteurs`);
 
@@ -310,12 +303,20 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
         console.log(`[VRP] ajouter-dynamique OK:`, insertResult);
 
         // STEP 7 — final full NSGA-II pass over merged solution
-        // FIX: correct endpoint is /optimize (alias in app.py)
-        //      /optimisation/optimiser is an internal router path → 404
         const optimResult = await vrpPost('/optimize', {});
         console.log(`[VRP] NSGA-II final OK — ${optimResult.distance_totale_km} km`);
 
         vrpData = optimResult;
+
+        // STEP 8 — cache result in MongoDB so Flutter can read it
+        // even after Python cold-starts and loses its in-memory state.
+        // All active commandes for this fournisseur get the latest solution.
+        await Commande.updateMany(
+          { fournisseur: req.user.id, status: 'en livraison' },
+          { $set: { vrpResult: optimResult } }
+        );
+        console.log('[VRP] result cached in MongoDB (vrpResult)');
+
       } else {
         console.warn(`[VRP] Commande ${commande._id} sans vrpId — VRP sauté`);
       }
@@ -399,13 +400,38 @@ router.put('/cancel/:id', auth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// GET VRP SOLUTION — passthrough to Python, called by Flutter map
+// GET VRP SOLUTION — serves cached NSGA-II result from MongoDB.
+// Falls back to live Python only if no cache exists yet.
+//
+// FIX: Python on Render free tier loses in-memory state on cold start.
+//      The /assign pipeline now saves optimResult to commande.vrpResult
+//      so this endpoint can serve it durably without hitting Python.
+//
 // GET /api/commandes/solution
 // ─────────────────────────────────────────────────────────────────
 router.get('/solution', auth, async (req, res) => {
   try {
+    // 1. Try MongoDB cache first — survives Python cold starts
+    const cached = await Commande.findOne(
+      {
+        fournisseur: req.user.id,
+        status:      'en livraison',
+        vrpResult:   { $ne: null },
+      },
+      { vrpResult: 1 },
+      { sort: { updatedAt: -1 } }
+    );
+
+    if (cached?.vrpResult) {
+      console.log('[VRP] /solution served from MongoDB cache');
+      return res.json(cached.vrpResult);
+    }
+
+    // 2. Fallback: ask Python directly (only works if still warm)
+    console.log('[VRP] /solution cache miss — trying Python live');
     const data = await vrpGet('/optimisation/solution');
     res.json(data);
+
   } catch (err) {
     console.error('GET /solution error:', err.message);
     res.status(err.response?.status || 502).json({
@@ -417,14 +443,21 @@ router.get('/solution', auth, async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────
 // MANUAL OPTIMIZE — trigger NSGA-II at any time (AppBar button)
+// Also refreshes the MongoDB cache with the new result.
 // POST /api/commandes/optimize
-//
-// FIX: correct endpoint is /optimize (not /optimisation/optimiser)
 // ─────────────────────────────────────────────────────────────────
 router.post('/optimize', auth, role('chauffeur'), async (req, res) => {
   try {
     const data = await vrpPost('/optimize', {});
     console.log('[VRP] manual optimize OK:', data);
+
+    // Refresh MongoDB cache with the new solution
+    await Commande.updateMany(
+      { fournisseur: req.user.id, status: 'en livraison' },
+      { $set: { vrpResult: data } }
+    );
+    console.log('[VRP] manual optimize — cache refreshed in MongoDB');
+
     res.json(data);
   } catch (err) {
     console.error('POST /optimize error:', err.message);

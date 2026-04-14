@@ -33,7 +33,6 @@ const commandeSchema = new mongoose.Schema({
     enum: ['en attente', 'en livraison', 'livrée', 'annulée'],
     default: 'en attente'
   },
-
   // ── ID Python VRP ──────────────────────────────────────────────
   // Stocke l'identifiant utilisé par le backend FastAPI/NSGA-II.
   // Permet de faire le lien entre MongoDB et le système VRP
@@ -41,8 +40,16 @@ const commandeSchema = new mongoose.Schema({
   vrpId: {
     type: Number,
     default: null
+  },
+  // ── Résultat NSGA-II mis en cache ──────────────────────────────
+  // Stocké après chaque /assign pour survivre aux redémarrages
+  // du backend Python (Render free tier cold starts).
+  // Flutter lit ce champ via GET /solution au lieu de proxifier
+  // vers Python dont l'état mémoire est éphémère.
+  vrpResult: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
   }
-
 }, { timestamps: true });
 
 module.exports = mongoose.model('Commande', commandeSchema);
