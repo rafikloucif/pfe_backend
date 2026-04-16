@@ -26,9 +26,32 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ msg: "Invalid email" });
     }
 
-    if (!email.endsWith("@gmail.com")) {
-      return res.status(400).json({ msg: "Only Gmail allowed" });
-    }
+    const allowedDomains = [
+    "@gmail.com",
+    "@yahoo.com",
+    "@outlook.com",
+    "@hotmail.com"
+];
+const isValidDomain = allowedDomains.some(domain =>
+  email.endsWith(domain)
+);
+
+if (!isValidDomain) {
+  return res.status(400).json({
+    msg: "Email domain non autorisé"
+  });
+}
+
+function isValidAlgerianPhone(phone) {
+  const regex = /^(05|06|07)[0-9]{8}$/;
+  return regex.test(phone);
+}
+
+if (!isValidAlgerianPhone(telephone)) {
+  return res.status(400).json({
+    msg: "Numéro invalide (doit commencer par 05/06/07 et contenir 10 chiffres)"
+  });
+}
 
     if (password.length < 8) {
       return res.status(400).json({ msg: "Password must be at least 6 characters" });
