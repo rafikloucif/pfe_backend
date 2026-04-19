@@ -55,39 +55,72 @@ router.post('/setup', auth, role('chauffeur'), async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.post('/add', auth, role('client'), async (req, res) => {
   try {
-    const { capacite, prix, fournisseurId, lat, lon } = req.body;
+    const { capacite, prix, lat, lon, wilaya } = req.body;  // ← add wilaya, remove fournisseurId
 
     if (!capacite || !prix)
       return res.status(400).json({ msg: 'Tous les champs sont obligatoires' });
     if (capacite <= 0 || prix <= 0)
       return res.status(400).json({ msg: 'Valeurs invalides' });
-    if (lat == null || lon == null)
-      return res.status(400).json({ msg: 'La position (lat, lon) est obligatoire' });
+    if (!wilaya)
+      return res.status(400).json({ msg: 'La wilaya est obligatoire' });
 
     const vrpId = genVrpId();
 
+    // Find online chauffeurs in the same wilaya
+    const matchingChauffeurs = await User.find({
+      $or: [{ role: 'chauffeur' }, { secondaryRole: 'chauffeur' }],
+      isOnline: true,
+      'fournisseurInfo.wilayas': wilaya,   // ← matches chauffeur's saved wilayas
+    }).select('_id');
+
     const commande = new Commande({
-      client:      req.user.id,
-      fournisseur: fournisseurId || null,
+      client:              req.user.id,
+      fournisseur:         null,           // ← no longer set by client
+      wilaya,
+      notifiedChauffeurs:  matchingChauffeurs.map(c => c.id),
       capacite,
       prix,
-      position: { lat, lon },
+      position: {
+        lat: lat ?? null,
+        lon: lon ?? null,
+      },
       vrpId,
     });
     await commande.save();
 
-    // Send response immediately, then notify Python after (non-blocking)
+    // Respond immediately
     res.json(commande);
 
-    vrpPost('/commandes/add', {
-      id:          vrpId,
-      lat,
-      lon,
-      demand:      capacite,
-      description: `${capacite}L`,
-    })
-      .then(() => console.log(`[VRP] Commande ${vrpId} enregistrée`))
-      .catch(e  => console.warn(`[VRP] /commandes/add non notifié (${vrpId}):`, e.message));
+    // Notify matching chauffeurs via socket
+    const io = req.app.get('io');
+    if (io && matchingChauffeurs.length > 0) {
+      matchingChauffeurs.forEach(c => {
+        io.to(`user${c._id}`).emit('new_commande', {
+          commandeId: commande._id,
+          wilaya,
+          capacite,
+          prix,
+          position: commande.position,
+          clientId: req.user.id,
+        });
+      });
+      console.log(`[Socket] Notified ${matchingChauffeurs.length} chauffeurs in ${wilaya}`);
+} else {
+      console.warn(`[Socket] No chauffeurs online in wilaya: ${wilaya}`);
+    }
+
+    // Non-blocking VRP registration
+    if (lat != null && lon != null) {
+      vrpPost('/commandes/add', {
+        id:          vrpId,
+        lat,
+        lon,
+        demand:      capacite,
+        description: `${capacite}L`,
+      })
+        .then(() => console.log(`[VRP] Commande ${vrpId} enregistrée`))
+        .catch(e  => console.warn(`[VRP] /commandes/add non notifié (${vrpId}):`, e.message));
+    }
 
   } catch (err) {
     console.error('POST /add error:', err.message);
@@ -102,8 +135,8 @@ router.post('/add', auth, role('client'), async (req, res) => {
 router.get('/pending', auth, role('chauffeur'), async (req, res) => {
   try {
     const commandes = await Commande.find({
-      fournisseur: req.user.id,
-      status:      'en attente',
+      notifiedChauffeurs: req.user.id,   // ← was: fournisseur: req.user.id
+      status: 'en attente',
     })
       .populate('client', '-password')
       .populate('chauffeur');

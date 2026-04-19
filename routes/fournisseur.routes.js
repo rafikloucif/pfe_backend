@@ -190,4 +190,20 @@ router.put('/quantite-eau', auth, role("chauffeur"), async (req, res) => {
   }
 });
 
+
+router.put('/wilayas', auth, role('chauffeur'), async (req, res) => {
+  try {
+    const { wilayas } = req.body;
+    if (!Array.isArray(wilayas) || wilayas.length === 0)
+      return res.status(400).json({ error: 'Au moins une wilaya requise' });
+
+    await User.findByIdAndUpdate(req.user.id, {
+      'fournisseurInfo.wilayas': wilayas   // ← must match your User model path
+    });
+    res.json({ msg: 'Wilayas mises à jour' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
