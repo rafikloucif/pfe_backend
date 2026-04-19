@@ -77,7 +77,7 @@ router.post('/add', auth, role('client'), async (req, res) => {
       client:              req.user.id,
       fournisseur:         null,           // ← no longer set by client
       wilaya,
-      notifiedChauffeurs:  matchingChauffeurs.map(c => c.id),
+      notifiedChauffeurs:  matchingChauffeurs.map(c => c._id),
       capacite,
       prix,
       position: {
