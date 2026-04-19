@@ -404,6 +404,28 @@ router.put('/livree/:id', auth, role('chauffeur'), async (req, res) => {
   }
 });
 
+
+
+// PUT /api/commandes/accept/:commandeId
+router.put('/accept/:commandeId', auth, role('chauffeur'), async (req, res) => {
+  try {
+    const commande = await Commande.findById(req.params.commandeId);
+    if (!commande) return res.status(404).json({ msg: 'Commande introuvable' });
+
+    if (commande.status !== 'en attente')
+      return res.status(400).json({ msg: 'Commande déjà traitée' });
+
+    commande.fournisseur = req.user.id;
+    commande.status = 'en livraison';
+    await commande.save();
+
+    res.json({ msg: 'Commande acceptée', commande });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // ─────────────────────────────────────────────────────────────────
 // CANCEL COMMANDE
 // PUT /api/commandes/cancel/:id
