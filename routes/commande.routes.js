@@ -70,7 +70,7 @@ router.post('/add', auth, role('client'), async (req, res) => {
     const matchingChauffeurs = await User.find({
       $or: [{ role: 'chauffeur' }, { secondaryRole: 'chauffeur' }],
       isOnline: true,
-      'fournisseurInfo.wilayas': wilaya,   // ← matches chauffeur's saved wilayas
+      'fournisseurInfo.wilayas': { $in: [wilaya] }   // ← matches chauffeur's saved wilayas
     }).select('_id');
 
     const commande = new Commande({
