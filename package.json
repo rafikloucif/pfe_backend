@@ -25,6 +25,7 @@
     "node-mailjet": "^6.0.11",
     "nodemailer": "^8.0.4",
     "resend": "^6.9.4",
+    "socket.io": "^4.8.3",
     "validator": "^13.15.26"
   },
   "devDependencies": {
