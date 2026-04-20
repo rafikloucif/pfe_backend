@@ -58,7 +58,11 @@ const commandeSchema = new mongoose.Schema({
   vrpResult: {
     type: mongoose.Schema.Types.Mixed,
     default: null
-  }
+  },
+  expiresAt: {
+  type: Date,
+  default: null
+}
 
 }, { timestamps: true });
 

@@ -432,9 +432,12 @@ router.put('/accept/:commandeId', auth, role('chauffeur'), async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.put('/cancel/:id', auth, async (req, res) => {
   console.log('>>> cancel hit | role:', req.user.role, '| id:', req.user.id);
+
   try {
     const commande = await Commande.findById(req.params.id);
-    if (!commande) return res.status(404).json({ msg: 'Commande introuvable' });
+
+    if (!commande)
+      return res.status(404).json({ msg: 'Commande introuvable' });
 
     if (req.user.role === 'client') {
       if (commande.client.toString() !== req.user.id)
@@ -452,9 +455,16 @@ router.put('/cancel/:id', auth, async (req, res) => {
       }
     }
 
+    // ✅ annulée
     commande.status = 'annulée';
+
+    // 🔥 auto delete بعد 10 دقائق
+    commande.expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
     await commande.save();
-    res.json({ msg: 'Commande annulée avec succès' });
+
+    res.json({ msg: 'Commande annulée avec succès (sera supprimée automatiquement)' });
+
   } catch (err) {
     console.error('PUT /cancel error:', err.message);
     res.status(500).json({ error: err.message });
