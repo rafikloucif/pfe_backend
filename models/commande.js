@@ -65,5 +65,6 @@ const commandeSchema = new mongoose.Schema({
 }
 
 }, { timestamps: true });
-
+ 
+commandeSchema.index({expiresAt:1},{expireAfterSeconds:0});
 module.exports = mongoose.model('Commande', commandeSchema); 
