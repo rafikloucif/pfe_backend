@@ -45,7 +45,8 @@ verified: { type: Boolean, default: false },
   // ── Info gérant ────────────────────────────────────────────────
   gerantInfo: {
     code: { type: String, default: null },
-    chauffeurs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+    chauffeurs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    camions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Camion' }]
   }
 
 }, { timestamps: true });

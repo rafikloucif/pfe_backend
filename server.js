@@ -24,6 +24,7 @@ connectDB();
 require('./models/user');
 require('./models/chauffeur');
 require('./models/commande');
+require('./models/camion');
 
 // ── Middleware ────────────────────────────────────────────
 app.use(express.json());
@@ -35,6 +36,7 @@ app.use(limiter);
 app.use('/api/auth',        require('./routes/auth.route'));
 app.use('/api/clients',     require('./routes/client.routes'));
 app.use('/api/fournisseurs',require('./routes/fournisseur.routes'));
+app.use('/api/camions',require('./routes/camion.route'));
 app.use('/api/chauffeurs',  require('./routes/chauffeur.routes'));
 app.use('/api/commandes',   require('./routes/commande.routes'));
 app.use('/api/position',    positionRoutes);
