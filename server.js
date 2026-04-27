@@ -22,7 +22,6 @@ connectDB();
 
 // ── Load models BEFORE routes ─────────────────────────────
 require('./models/user');
-require('./models/chauffeur');
 require('./models/commande');
 require('./models/camion');
 
@@ -34,10 +33,10 @@ app.use(limiter);
 
 // ── Routes ────────────────────────────────────────────────
 app.use('/api/auth',        require('./routes/auth.route'));
+app.use('/api/admin',        require('./routes/admin.route'));
 app.use('/api/clients',     require('./routes/client.routes'));
 app.use('/api/fournisseurs',require('./routes/fournisseur.routes'));
 app.use('/api/camions',require('./routes/camion.route'));
-app.use('/api/chauffeurs',  require('./routes/chauffeur.routes'));
 app.use('/api/commandes',   require('./routes/commande.routes'));
 app.use('/api/position',    positionRoutes);
 
