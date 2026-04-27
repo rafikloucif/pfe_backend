@@ -63,10 +63,30 @@ app.post('/api/ai/optimise', auth, async (req, res) => {
   }
 });
 
-// ── PUBLIC: must be BEFORE the verifyAdmin block ──
-app.post('/api/admin/login', (req, res, next) => {
-  req.url = '/login';
-  adminRoutes(req, res, next);
+
+// ── PUBLIC admin login — BEFORE verifyAdmin ──
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const ADMIN_EMAIL    = process.env.ADMIN_EMAIL  ;
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD  ;
+
+    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+      return res.status(401).json({ msg: 'Identifiants incorrects' });
+    }
+
+    const jwt   = require('jsonwebtoken');
+    const token = jwt.sign(
+      { id: 'admin', role: 'admin', email },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({ token });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // GET /api/ai/solution — fetch the current optimised solution
