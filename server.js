@@ -63,10 +63,9 @@ app.post('/api/ai/optimise', auth, async (req, res) => {
   }
 });
 
-// The /login route is inside adminRoutes but needs to be public
-// So we allow POST /api/admin/login to pass through without verifyAdmin
+// ── PUBLIC: must be BEFORE the verifyAdmin block ──
 app.post('/api/admin/login', (req, res, next) => {
-  req.url = '/login'; // rewrite url so router matches
+  req.url = '/login';
   adminRoutes(req, res, next);
 });
 

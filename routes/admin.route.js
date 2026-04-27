@@ -38,22 +38,22 @@ const Warning     = require('../models/Warning');     // create if missing
 //   }
 // };
 
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-
-// POST /api/admin/login  — PUBLIC (no verifyAdmin)
+// POST /api/admin/login — PUBLIC
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check against env variables
-    if (
-      email    !== process.env.ADMIN_EMAIL ||
-      password !== process.env.ADMIN_PASSWORD
-    ) {
+    console.log('[Admin Login] email:', email); // ← debug
+    console.log('[Admin Login] expected:', process.env.ADMIN_EMAIL); // ← debug
+
+    const ADMIN_EMAIL    = process.env.ADMIN_EMAIL  ;
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ;
+
+    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
       return res.status(401).json({ msg: 'Identifiants incorrects' });
     }
 
+    const jwt   = require('jsonwebtoken');
     const token = jwt.sign(
       { id: 'admin', role: 'admin', email },
       process.env.JWT_SECRET,
@@ -62,10 +62,10 @@ router.post('/login', async (req, res) => {
 
     res.json({ token });
   } catch (e) {
+    console.error('[Admin Login] error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
-
 // ============================================================
 // ── USERS ────────────────────────────────────────────────────
 // ============================================================
