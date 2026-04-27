@@ -26,6 +26,7 @@ require('./models/commande');
 require('./models/camion');
 require('./models/Avis');
 require('./models/chauffeur');
+require('./models/Reclamation');
 // ── Middleware ────────────────────────────────────────────
 app.use(express.json());
 app.use(helmet());
@@ -37,6 +38,7 @@ app.use('/api/auth',        require('./routes/auth.route'));
 app.use('/api/admin',        require('./routes/admin.route'));
 app.use('/api/clients',     require('./routes/client.routes'));
 app.use('/api/avis',     require('./routes/avis.route'));
+app.use('/api/reclamations',     require('./routes/reclamations.route'));
 app.use('/api/fournisseurs',require('./routes/fournisseur.routes'));
 app.use('/api/camions',require('./routes/camion.route'));
 app.use('/api/commandes',   require('./routes/commande.routes'));
