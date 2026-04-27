@@ -36,9 +36,49 @@ app.use(helmet());
 app.use(cors());
 app.use(limiter);
 
-// ── Routes ────────────────────────────────────────────────
-app.use('/api/auth',        require('./routes/auth.route'));
+//------------------------------------------------
+
+app.use('/api/auth', require('./routes/auth.route'));
+
+// ── PUBLIC admin login — MUST be before verifyAdmin ──
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const ADMIN_EMAIL    = process.env.ADMIN_EMAIL   ;
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD  ;
+
+    console.log('[Admin Login] email received:', email);
+    console.log('[Admin Login] expected:', ADMIN_EMAIL);
+
+    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+      return res.status(401).json({ msg: 'Identifiants incorrects' });
+    }
+
+    const jwt   = require('jsonwebtoken');
+    const token = jwt.sign(
+      { id: 'admin', role: 'admin', email },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({ token });
+  } catch (e) {
+    console.error('[Admin Login] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── PROTECTED admin routes ──
 app.use('/api/admin', verifyAdmin, adminRoutes);
+
+
+
+
+
+
+// ── Routes ────────────────────────────────────────────────
+
 app.use('/api/clients',     require('./routes/client.routes'));
 app.use('/api/avis',     require('./routes/avis.route'));
 app.use('/api/reclamations',     require('./routes/reclamations.route'));
@@ -64,30 +104,6 @@ app.post('/api/ai/optimise', auth, async (req, res) => {
 });
 
 
-// ── PUBLIC admin login — BEFORE verifyAdmin ──
-app.post('/api/admin/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    const ADMIN_EMAIL    = process.env.ADMIN_EMAIL  ;
-    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD  ;
-
-    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
-      return res.status(401).json({ msg: 'Identifiants incorrects' });
-    }
-
-    const jwt   = require('jsonwebtoken');
-    const token = jwt.sign(
-      { id: 'admin', role: 'admin', email },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.json({ token });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
 // GET /api/ai/solution — fetch the current optimised solution
 app.get('/api/ai/solution', auth, async (req, res) => {
