@@ -1,6 +1,7 @@
 const express = require('express');
 const axios   = require('axios');
 const Commande  = require('../models/commande');
+const Chauffeur = require('../models/chauffeur');
 const User      = require('../models/user');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');

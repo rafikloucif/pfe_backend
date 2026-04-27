@@ -4,7 +4,7 @@ const axios = require('axios');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const User = require('../models/user');
-
+const Chauffeur = require('../models/chauffeur');
 
 // ✅ FIXED: was hardcoded to localhost, now uses env var
 const VRP_API = process.env.VRP_API_URL || 'http://localhost:8000';

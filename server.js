@@ -25,6 +25,7 @@ require('./models/user');
 require('./models/commande');
 require('./models/camion');
 require('./models/Avis');
+require('./models/chauffeur');
 // ── Middleware ────────────────────────────────────────────
 app.use(express.json());
 app.use(helmet());
@@ -39,6 +40,7 @@ app.use('/api/avis',     require('./routes/avis.route'));
 app.use('/api/fournisseurs',require('./routes/fournisseur.routes'));
 app.use('/api/camions',require('./routes/camion.route'));
 app.use('/api/commandes',   require('./routes/commande.routes'));
+app.use('/api/chauffeur',   require('./routes/chauffeur.routes'));
 app.use('/api/position',    positionRoutes);
 
 // ── AI / VRP proxy routes ─────────────────────────────────

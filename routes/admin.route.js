@@ -304,7 +304,6 @@ router.get('/commandes', async (req, res) => {
   }
 });
 
-// PUT /api/admin/commandes/:id/cancel
 router.put('/commandes/:id/cancel', async (req, res) => {
   try {
     const commande = await Commande.findByIdAndUpdate(
@@ -319,7 +318,6 @@ router.put('/commandes/:id/cancel', async (req, res) => {
   }
 });
 
-// PUT /api/admin/commandes/:commandeId/assign/:chauffeurId
 router.put('/commandes/:commandeId/assign/:chauffeurId', async (req, res) => {
   try {
     const commande = await Commande.findByIdAndUpdate(
@@ -333,7 +331,6 @@ router.put('/commandes/:commandeId/assign/:chauffeurId', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-
 module.exports = router;
 
 
