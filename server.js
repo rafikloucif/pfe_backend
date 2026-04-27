@@ -7,6 +7,9 @@ const axios = require('axios'); // ✅ FIXED: was missing
 const connectDB = require('./config/db');
 const positionRoutes = require('./routes/position.route');
 const auth = require('./middleware/auth');
+const adminRoutes = require('./routes/admin.route');
+const verifyAdmin = require('./middleware/verifyAdmin');
+
 
 const app = express();
 
@@ -35,7 +38,7 @@ app.use(limiter);
 
 // ── Routes ────────────────────────────────────────────────
 app.use('/api/auth',        require('./routes/auth.route'));
-app.use('/api/admin',        require('./routes/admin.route'));
+app.use('/api/admin', verifyAdmin, adminRoutes);
 app.use('/api/clients',     require('./routes/client.routes'));
 app.use('/api/avis',     require('./routes/avis.route'));
 app.use('/api/reclamations',     require('./routes/reclamations.route'));
@@ -58,6 +61,13 @@ app.post('/api/ai/optimise', auth, async (req, res) => {
     const status = err.response?.status || 502;
     res.status(status).json({ msg: "Erreur VRP", error: err.response?.data || err.message });
   }
+});
+
+// The /login route is inside adminRoutes but needs to be public
+// So we allow POST /api/admin/login to pass through without verifyAdmin
+app.post('/api/admin/login', (req, res, next) => {
+  req.url = '/login'; // rewrite url so router matches
+  adminRoutes(req, res, next);
 });
 
 // GET /api/ai/solution — fetch the current optimised solution

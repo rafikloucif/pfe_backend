@@ -38,6 +38,34 @@ const Warning     = require('../models/Warning');     // create if missing
 //   }
 // };
 
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+
+// POST /api/admin/login  — PUBLIC (no verifyAdmin)
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Check against env variables
+    if (
+      email    !== process.env.ADMIN_EMAIL ||
+      password !== process.env.ADMIN_PASSWORD
+    ) {
+      return res.status(401).json({ msg: 'Identifiants incorrects' });
+    }
+
+    const token = jwt.sign(
+      { id: 'admin', role: 'admin', email },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({ token });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============================================================
 // ── USERS ────────────────────────────────────────────────────
 // ============================================================
