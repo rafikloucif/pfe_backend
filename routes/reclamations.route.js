@@ -5,25 +5,22 @@ const auth        = require('../middleware/auth');
 const role        = require('../middleware/role');
 
 // POST /api/reclamations/add — client submits a ticket
-router.post('/add', auth, role('client'), async (req, res) => {
+router.post('/add', auth, async (req, res) => {  // ← removed role('client')
   try {
     const { sujet, message, priorite } = req.body;
     if (!sujet) return res.status(400).json({ msg: 'Sujet requis' });
-
     const reclamation = await Reclamation.create({
-      client:   req.user.id,
+      client:   req.user.id,   // works for any role
       sujet,
       message:  message ?? '',
       priorite: priorite ?? 'normale',
       status:   'ouverte',
     });
-
     res.json(reclamation);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
-
 // GET /api/reclamations/my — client sees their own tickets
 router.get('/my', auth, role('client'), async (req, res) => {
   try {
