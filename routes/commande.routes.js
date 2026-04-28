@@ -193,6 +193,7 @@ router.get('/:id/track', auth, async (req, res) => {
   try {
     const commande = await Commande.findById(req.params.id)
       .populate('client', '-password')
+      .populate('chauffeur', 'nom telephone noteMoyenne')
       .populate('chauffeur')
       .populate('fournisseur', 'nom prenom position isOnline updatedAt');
 

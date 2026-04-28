@@ -42,6 +42,13 @@ verified: { type: Boolean, default: false },
     wilayas: { type: [String], default: [] }
   },
 
+noteMoyenne: {
+  type:    Number,
+  default: 0,
+  min:     0,
+  max:     5,
+},
+
   // ── Info gérant ────────────────────────────────────────────────
   gerantInfo: {
     code: { type: String, default: null },
