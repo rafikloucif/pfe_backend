@@ -208,10 +208,17 @@ router.put('/chauffeurs/:id/status', async (req, res) => {
 router.get('/reclamations', async (req, res) => {
   try {
     const claims = await Reclamation.find()
-      .populate('client', 'nom prenom email')   // attach client name
+      .populate('client', 'nom prenom email')
       .sort({ createdAt: -1 })
       .lean();
-    res.json(claims);
+
+    // Flatten for Flutter
+    const mapped = claims.map(r => ({
+      ...r,
+      clientNom: `${r.client?.prenom ?? ''} ${r.client?.nom ?? ''}`.trim(),
+    }));
+
+    res.json(mapped);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
