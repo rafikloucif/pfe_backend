@@ -1,7 +1,6 @@
 const express = require('express');
 const axios   = require('axios');
 const Commande  = require('../models/commande');
-const Chauffeur = require('../models/chauffeur');
 const User      = require('../models/user');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
@@ -55,7 +54,7 @@ router.post('/setup', auth, role('chauffeur'), async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.post('/add', auth, role('client'), async (req, res) => {
   try {
-    const { capacite, prix, lat, lon, wilaya } = req.body;  // ← add wilaya, remove fournisseurId
+    const { capacite, prix, lat, lon, wilaya } = req.body;  // ← add wilaya, remove chauffeurId
 
     if (!capacite || !prix)
       return res.status(400).json({ msg: 'Tous les champs sont obligatoires' });
@@ -70,12 +69,12 @@ router.post('/add', auth, role('client'), async (req, res) => {
     const matchingChauffeurs = await User.find({
       $or: [{ role: 'chauffeur' }, { secondaryRole: 'chauffeur' }],
       isOnline: true,
-      'fournisseurInfo.wilayas': { $in: [wilaya] }   // ← matches chauffeur's saved wilayas
+      'chauffeurInfo.wilayas': { $in: [wilaya] }   // ← matches chauffeur's saved wilayas
     }).select('_id');
 
     const commande = new Commande({
       client:              req.user.id,
-      fournisseur:         null,           // ← no longer set by client
+      chauffeur:         null,           // ← no longer set by client
       wilaya,
       notifiedChauffeurs:  matchingChauffeurs.map(c => c._id),
       capacite,
@@ -135,7 +134,7 @@ router.post('/add', auth, role('client'), async (req, res) => {
 router.get('/pending', auth, role('chauffeur'), async (req, res) => {
   try {
     const commandes = await Commande.find({
-      notifiedChauffeurs: req.user.id,   // ← was: fournisseur: req.user.id
+      notifiedChauffeurs: req.user.id,   // ← was: chauffeur: req.user.id
       status: 'en attente',
     })
       .populate('client', '-password')
@@ -148,20 +147,20 @@ router.get('/pending', auth, role('chauffeur'), async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// GET ALL COMMANDES for fournisseur  (optional ?status= filter)
+// GET ALL COMMANDES for chauffeur  (optional ?status= filter)
 // GET /api/commandes
 // ─────────────────────────────────────────────────────────────────
 router.get('/', auth, role('chauffeur'), async (req, res) => {
   try {
     const { status } = req.query;
-    const filter = { fournisseur: req.user.id };
+    const filter = { chauffeur: req.user.id };
     if (status) filter.status = status;
 
     const commandes = await Commande.find(filter)
       .populate('client', '-password')
       .populate('chauffeur');
 
-    console.log(`[commandes] found ${commandes.length} for fournisseur ${req.user.id}`);
+    console.log(`[commandes] found ${commandes.length} for chauffeur ${req.user.id}`);
     res.json(commandes);
   } catch (err) {
     console.error('GET /commandes error:', err.message);
@@ -176,7 +175,7 @@ router.get('/', auth, role('chauffeur'), async (req, res) => {
 router.get('/my', auth, role('client'), async (req, res) => {
   try {
     const commandes = await Commande.find({ client: req.user.id })
-      .populate('fournisseur', 'nom prenom position isOnline')
+      .populate('chauffeur', 'nom prenom position isOnline')
       .populate('chauffeur');
     res.json(commandes);
   } catch (err) {
@@ -194,26 +193,30 @@ router.get('/:id/track', auth, async (req, res) => {
     const commande = await Commande.findById(req.params.id)
       .populate('client', '-password')
       .populate('chauffeur')
-      .populate('fournisseur', 'nom prenom position isOnline updatedAt');
+      .populate('chauffeur', 'nom prenom position isOnline updatedAt');
 
     if (!commande) return res.status(404).json({ msg: 'Commande introuvable' });
 
-    const fournisseur = commande.fournisseur;
+    const chauffeur = commande.chauffeur;
     res.json({
       statut:      commande.status,
-      driver_lat:  fournisseur?.position?.lat ?? null,
-      driver_lon:  fournisseur?.position?.lon ?? null,
+      driver_lat:  chauffeur?.position?.lat ?? null,
+      driver_lon:  chauffeur?.position?.lon ?? null,
       destination: {
         lat: commande.position?.lat ?? null,
         lon: commande.position?.lon ?? null,
       },
       chauffeur: commande.chauffeur
-        ? { nom: commande.chauffeur.nom ?? null, telephone: commande.chauffeur.telephone ?? null }
+  ? {
+      nom:          commande.chauffeur.nom         ?? null,
+      telephone:    commande.chauffeur.telephone   ?? null,
+      noteMoyenne:  commande.chauffeur.noteMoyenne ?? 0,
+    }
+  : null,
+      chauffeur: chauffeur
+        ? { nom: chauffeur.nom ?? null, prenom: chauffeur.prenom ?? null }
         : null,
-      fournisseur: fournisseur
-        ? { nom: fournisseur.nom ?? null, prenom: fournisseur.prenom ?? null }
-        : null,
-      lastUpdate: fournisseur?.updatedAt ?? null,
+      lastUpdate: chauffeur?.updatedAt ?? null,
     });
   } catch (err) {
     console.error('GET /track error:', err.message);
@@ -239,13 +242,13 @@ router.get('/:id/track', auth, async (req, res) => {
 router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (req, res) => {
   try {
     const commande    = await Commande.findById(req.params.commandeId);
-    const fournisseur = await User.findById(req.user.id);
+    const chauffeur = await User.findById(req.user.id);
 
-    if (!commande || !fournisseur)
+    if (!commande || !chauffeur)
       return res.status(404).json({ msg: 'Not found' });
 
     // ── Driver resolution ────────────────────────────────────────
-    let chauffeur      = null;
+   
     let isSelfDelivery = false;
 
     if (req.params.chauffeurId === req.user.id) {
@@ -260,18 +263,18 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
     }
 
     // ── Stock check ──────────────────────────────────────────────
-    const quantiteActuelle = fournisseur.fournisseurInfo?.quantiteEau || 0;
+    const quantiteActuelle = chauffeur.chauffeurInfo?.quantiteEau || 0;
     const quantiteCommande = commande.capacite || 0;
     if (quantiteActuelle < quantiteCommande) {
       return res.status(400).json({ msg: "Quantité d'eau insuffisante" });
     }
 
     // ── Save to MongoDB ──────────────────────────────────────────
-    fournisseur.fournisseurInfo.quantiteEau = quantiteActuelle - quantiteCommande;
+    chauffeur.chauffeurInfo.quantiteEau = quantiteActuelle - quantiteCommande;
     commande.chauffeur = isSelfDelivery ? null : chauffeur._id;
     commande.status    = 'en livraison';
 
-    await fournisseur.save();
+    await chauffeur.save();
     await commande.save();
 
     // ── VRP pipeline ─────────────────────────────────────────────
@@ -284,18 +287,18 @@ router.put('/assign/:commandeId/:chauffeurId', auth, role('chauffeur'), async (r
       const driverList = allChauffeurs.map(c => ({
         id:       c._id.toString(),
         capacity: c.capacity ?? 1000,        
-        lat:      c.position?.lat ?? fournisseur.position?.lat ?? 0,
-        lon:      c.position?.lon ?? fournisseur.position?.lon ?? 0,
+        lat:      c.position?.lat ?? chauffeur.position?.lat ?? 0,
+        lon:      c.position?.lon ?? chauffeur.position?.lon ?? 0,
         nom:      c.nom ?? 'Chauffeur',
       }));
 
       if (driverList.length === 0 || isSelfDelivery) {
         driverList.push({
           id:       req.user.id,
-          lat:      fournisseur.position?.lat ?? 0,
-          lon:      fournisseur.position?.lon ?? 0,
-          capacity: fournisseur.fournisseurInfo?.capaciteMax ?? 5000,
-          nom:      `${fournisseur.nom ?? ''} ${fournisseur.prenom ?? ''}`.trim(),
+          lat:      chauffeur.position?.lat ?? 0,
+          lon:      chauffeur.position?.lon ?? 0,
+          capacity: chauffeur.chauffeurInfo?.capaciteMax ?? 5000,
+          nom:      `${chauffeur.nom ?? ''} ${chauffeur.prenom ?? ''}`.trim(),
         });
       }
 
@@ -343,9 +346,9 @@ console.log(`[VRP] /setup OK — ${driverList.length} conducteurs`);
 
         // STEP 8 — cache result in MongoDB so Flutter can read it
         // even after Python cold-starts and loses its in-memory state.
-        // All active commandes for this fournisseur get the latest solution.
+        // All active commandes for this chauffeur get the latest solution.
         await Commande.updateMany(
-          { fournisseur: req.user.id, status: 'en livraison' },
+          { chauffeur: req.user.id, status: 'en livraison' },
           { $set: { vrpResult: optimResult } }
         );
         console.log('[VRP] result cached in MongoDB (vrpResult)');
@@ -361,7 +364,7 @@ console.log(`[VRP] /setup OK — ${driverList.length} conducteurs`);
 
     res.json({
       msg:                 'Commande assignée avec succès',
-      nouvelleQuantiteEau: fournisseur.fournisseurInfo.quantiteEau,
+      nouvelleQuantiteEau: chauffeur.chauffeurInfo.quantiteEau,
       vrp:                 vrpData,
     });
   } catch (err) {
@@ -415,7 +418,7 @@ router.put('/accept/:commandeId', auth, role('chauffeur'), async (req, res) => {
     if (commande.status !== 'en attente')
       return res.status(400).json({ msg: 'Commande déjà traitée' });
 
-    commande.fournisseur = req.user.id;
+    commande.chauffeur = req.user.id;
     commande.status = 'en livraison';
     await commande.save();
 
@@ -486,7 +489,7 @@ router.get('/solution', auth, async (req, res) => {
     // 1. Try MongoDB cache first — survives Python cold starts
     const cached = await Commande.findOne(
       {
-        fournisseur: req.user.id,
+        chauffeur: req.user.id,
         status:      'en livraison',
         vrpResult:   { $ne: null },
       },
@@ -525,7 +528,7 @@ router.post('/optimize', auth, role('chauffeur'), async (req, res) => {
 
     // Refresh MongoDB cache with the new solution
     await Commande.updateMany(
-      { fournisseur: req.user.id, status: 'en livraison' },
+      { chauffeur: req.user.id, status: 'en livraison' },
       { $set: { vrpResult: data } }
     );
     console.log('[VRP] manual optimize — cache refreshed in MongoDB');

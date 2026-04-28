@@ -6,16 +6,12 @@ const commandeSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  fournisseur: {
+  chauffeur: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     default: null
   },
-  chauffeur: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Chauffeur',
-    default: null
-  },
+  
 
   // ── NEW: wilaya chosen by client ──────────────────────────────
   wilaya: {
