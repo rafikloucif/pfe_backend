@@ -193,9 +193,11 @@ router.get('/:id/track', auth, async (req, res) => {
   try {
     const commande = await Commande.findById(req.params.id)
       .populate('client', '-password')
-      .populate('chauffeur', 'nom telephone noteMoyenne')
-      .populate('chauffeur')
-      .populate('fournisseur', 'nom prenom position isOnline updatedAt');
+      .populate('chauffeur', 'nom telephone noteMoyenne')        // ← only one populate
+      .populate('fournisseur', '-password');                     // ← all fields except password
+
+    console.log('[TRACK] fournisseur:', JSON.stringify(commande?.fournisseur));
+    console.log('[TRACK] chauffeur:',   JSON.stringify(commande?.chauffeur));
 
     if (!commande) return res.status(404).json({ msg: 'Commande introuvable' });
 
@@ -209,14 +211,19 @@ router.get('/:id/track', auth, async (req, res) => {
         lon: commande.position?.lon ?? null,
       },
       chauffeur: commande.chauffeur
-  ? {
-      nom:          commande.chauffeur.nom         ?? null,
-      telephone:    commande.chauffeur.telephone   ?? null,
-      noteMoyenne:  commande.chauffeur.noteMoyenne ?? 0,
-    }
-  : null,
+        ? {
+            nom:         commande.chauffeur.nom         ?? null,
+            telephone:   commande.chauffeur.telephone   ?? null,
+            noteMoyenne: commande.chauffeur.noteMoyenne ?? 0,
+          }
+        : null,
       fournisseur: fournisseur
-        ? { nom: fournisseur.nom ?? null, prenom: fournisseur.prenom ?? null }
+        ? {
+            nom:         fournisseur.nom         ?? null,
+            prenom:      fournisseur.prenom       ?? null,
+            telephone:   fournisseur.telephone    ?? null,  // ← now included
+            noteMoyenne: fournisseur.noteMoyenne  ?? 0,     // ← now included
+          }
         : null,
       lastUpdate: fournisseur?.updatedAt ?? null,
     });
