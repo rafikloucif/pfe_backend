@@ -11,6 +11,11 @@ const userSchema = new mongoose.Schema({
     enum: ['client',  'chauffeur', 'gerant'],
     default : null 
   },
+  status: {                                    // ← add this
+    type: String,
+    enum: ['actif', 'suspendu', 'inactif'],
+    default: 'actif'
+  },
 
 
 verified: { type: Boolean, default: false },
