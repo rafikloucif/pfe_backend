@@ -135,6 +135,24 @@ router.delete('/users/:id', async (req, res) => {
   }
 });
 
+
+
+// POST /api/admin/signalement
+router.post('/signalement', async (req, res) => {
+  try {
+    const { targetName, targetType, raison, message } = req.body;
+    await Warning.create({
+      title: `Signalement : ${raison}`,
+      user:  `${targetType} : ${targetName}`,
+      level: 'urgent',
+      treated: false,
+    });
+    res.json({ msg: 'Signalement envoyé' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============================================================
 // ── CHAUFFEURS ───────────────────────────────────────────────
 // ============================================================
