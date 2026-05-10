@@ -5,6 +5,7 @@ const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const User = require('../models/user');
 const Chauffeur = require('../models/chauffeur');
+const mongoose = require('mongoose')
 
 // ✅ FIXED: was hardcoded to localhost, now uses env var
 const VRP_API = process.env.VRP_API_URL || 'http://localhost:8000';
@@ -110,12 +111,19 @@ router.get('/my', auth, role("gerant"), async (req, res) => {
 // ─── DELETE CHAUFFEUR (gérant) ────────────────────────────────────
 router.delete('/:id', auth, role("gerant"), async (req, res) => {
   try {
-    const chauffeur = await Chauffeur.findOne({ _id: req.params.id, gerant: req.user.id });
-    if (!chauffeur) return res.status(404).json({ msg: "Chauffeur non trouvé" });
-    await chauffeur.deleteOne();
+    const gerant = await User.findById(req.user.id);
+    if (!gerant) return res.status(404).json({ msg: "Gérant non trouvé" });
+
+    const belongs = gerant.gerantInfo.chauffeurs
+      .map(id => id.toString())
+      .includes(req.params.id);
+
+    if (!belongs) return res.status(404).json({ msg: "Chauffeur non trouvé" });
+
     await User.findByIdAndUpdate(req.user.id, {
-      $pull: { 'gerantInfo.chauffeurs': chauffeur._id }
+      $pull: { 'gerantInfo.chauffeurs': new mongoose.Types.ObjectId(req.params.id) } // ✅ ObjectId, not string
     });
+
     res.json({ msg: "Chauffeur supprimé" });
   } catch (err) {
     res.status(500).json({ msg: "Server error", error: err.message });
