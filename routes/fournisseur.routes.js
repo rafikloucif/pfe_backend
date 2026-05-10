@@ -113,10 +113,12 @@ router.delete('/:id', auth, role("gerant"), async (req, res) => {
   try {
     const gerant = await User.findById(req.user.id);
     if (!gerant) return res.status(404).json({ msg: "Gérant non trouvé" });
-
+    console.log('GERANT CHAUFFEURS:', gerant.gerantInfo.chauffeurs);
+    console.log('LOOKING FOR ID:', req.params.id);
     const belongs = gerant.gerantInfo.chauffeurs
       .map(id => id.toString())
       .includes(req.params.id);
+      console.log('BELONGS:', belongs);
 
     if (!belongs) return res.status(404).json({ msg: "Chauffeur non trouvé" });
 
