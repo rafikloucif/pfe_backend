@@ -25,6 +25,7 @@ connectDB();
 
 // ── Load models BEFORE routes ─────────────────────────────
 require('./models/user');
+require('./models/Signalement');
 require('./models/commande');
 require('./models/camion');
 require('./models/Avis');
@@ -80,6 +81,7 @@ app.use('/api/admin', verifyAdmin, adminRoutes);
 // ── Routes ────────────────────────────────────────────────
 
 app.use('/api/clients',     require('./routes/client.routes'));
+app.use('/api/signalements', require('./routes/signalements.route'));
 app.use('/api/avis',     require('./routes/avis.route'));
 app.use('/api/reclamations',     require('./routes/reclamations.route'));
 app.use('/api/fournisseurs',require('./routes/fournisseur.routes'));
