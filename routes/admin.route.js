@@ -194,7 +194,7 @@ router.get('/abonnements', async (req, res) => {
         { role: 'chauffeur' },
         { secondaryRole: 'chauffeur' },
       ],
-      'fournisseurInfo.abonnement': { $ne: null },
+      
     })
       .select('-password')
       .lean();
