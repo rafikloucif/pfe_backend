@@ -22,6 +22,10 @@ const commandeSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  prixFourchette: {
+  type: String,
+  default: null,
+},
 
   // ── NEW: chauffeurs notified via socket ───────────────────────
   notifiedChauffeurs: [{
