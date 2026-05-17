@@ -58,7 +58,12 @@ noteMoyenne: {
   gerantInfo: {
     code: { type: String, default: null },
     chauffeurs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-    camions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Camion' }]
+    camions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Camion' }],
+    numeroPremit:  { type: String, default: null },
+    abonnement:    { type: String, enum: ['mensuel','trimestriel','annuel'], default: null },
+    refPaiement:   { type: String, default: null },
+    abonnementStatut: { type: String, enum: ['en_attente','actif','expire'], default: 'en_attente' },
+    abonnementExpire: { type: Date, default: null },
   }
 
 }, { timestamps: true });

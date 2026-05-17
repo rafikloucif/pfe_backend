@@ -1,57 +1,36 @@
-// ============================================================
-// routes/admin.route.js
-// Mount this in your main app.js / server.js with:
-//   const adminRoutes = require('./routes/admin');
-//   app.use('/api/admin', verifyAdmin, adminRoutes);
-// ============================================================
-
 const express = require('express');
 const router  = express.Router();
 
-// -- adjust these paths to match your project structure --
-const User        = require('../models/user');        // your user model
+const User        = require('../models/user');
 const Commande    = require('../models/commande');
-const Reclamation = require('../models/Reclamation'); // create if missing
-const Avis        = require('../models/Avis');        // create if missing
-const Log         = require('../models/Log');         // create if missing
-const Warning     = require('../models/Warning');     // create if missing
+const Reclamation = require('../models/Reclamation');
+const Avis        = require('../models/Avis');
+const Log         = require('../models/Log');
+const Warning     = require('../models/Warning');
 
-// ============================================================
-// MIDDLEWARE  —  paste this in a separate file or inline here
-// ============================================================
-// middlewares/verifyAdmin.js
-//
-// const jwt = require('jsonwebtoken');
-// module.exports = (req, res, next) => {
-//   const auth = req.headers.authorization;
-//   if (!auth) return res.status(401).json({ msg: 'No token' });
-//   try {
-//     const decoded = jwt.verify(auth.split(' ')[1], process.env.JWT_SECRET);
-//     // Option A: you store role in the token
-//     if (decoded.role !== 'admin') return res.status(403).json({ msg: 'Forbidden' });
-//     // Option B: you check a hardcoded admin email/id
-//     // if (decoded.email !== process.env.ADMIN_EMAIL) return res.status(403).json({ msg: 'Forbidden' });
-//     req.user = decoded;
-//     next();
-//   } catch (e) {
-//     return res.status(401).json({ msg: 'Invalid token' });
-//   }
-// };
+// ── Duration map for abonnement plans ────────────────────────
+const PLAN_DURATIONS = {
+  mensuel:      30,
+  trimestriel:  90,
+  annuel:       365,
+};
+
+// ── Helper: log an admin action ───────────────────────────────
+async function createLog(action, detail, type, author = 'Admin') {
+  try { await Log.create({ action, detail, type, author }); }
+  catch (_) { /* non-fatal */ }
+}
 
 // POST /api/admin/login — PUBLIC
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log('[Admin Login] email:', email); // ← debug
-    console.log('[Admin Login] expected:', process.env.ADMIN_EMAIL); // ← debug
+    const ADMIN_EMAIL    = process.env.ADMIN_EMAIL;
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
-    const ADMIN_EMAIL    = process.env.ADMIN_EMAIL  ;
-    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ;
-
-    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD)
       return res.status(401).json({ msg: 'Identifiants incorrects' });
-    }
 
     const jwt   = require('jsonwebtoken');
     const token = jwt.sign(
@@ -59,26 +38,23 @@ router.post('/login', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
-
     res.json({ token });
   } catch (e) {
     console.error('[Admin Login] error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
+
 // ============================================================
 // ── USERS ────────────────────────────────────────────────────
 // ============================================================
 
-// GET /api/admin/users
-// Returns all users (clients + fournisseurs, NOT admins)
 router.get('/users', async (req, res) => {
   try {
     const users = await User.find({ role: { $ne: 'admin' } })
-      .select('-password')          // never send passwords
+      .select('-password')
       .lean();
 
-    // Attach order count to each user
     const withCounts = await Promise.all(users.map(async (u) => {
       const orders = await Commande.countDocuments({ client: u._id });
       return { ...u, commandesCount: orders };
@@ -90,7 +66,6 @@ router.get('/users', async (req, res) => {
   }
 });
 
-// PUT /api/admin/users/:id/suspend
 router.put('/users/:id/suspend', async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(
@@ -99,13 +74,13 @@ router.put('/users/:id/suspend', async (req, res) => {
       { new: true }
     ).select('-password');
     if (!user) return res.status(404).json({ msg: 'User not found' });
+    await createLog('Compte suspendu', `${user.nom} ${user.prenom}`, 'compte');
     res.json(user);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// PUT /api/admin/users/:id/unsuspend
 router.put('/users/:id/unsuspend', async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(
@@ -114,37 +89,34 @@ router.put('/users/:id/unsuspend', async (req, res) => {
       { new: true }
     ).select('-password');
     if (!user) return res.status(404).json({ msg: 'User not found' });
+    await createLog('Compte réactivé', `${user.nom} ${user.prenom}`, 'compte');
     res.json(user);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// DELETE /api/admin/users/:id
 router.delete('/users/:id', async (req, res) => {
   try {
-    await User.findByIdAndDelete(req.params.id);
-    // Optional: also cancel their pending commandes
+    const user = await User.findByIdAndDelete(req.params.id);
     await Commande.updateMany(
       { client: req.params.id, status: { $in: ['en attente', 'en cours'] } },
       { status: 'annulée' }
     );
+    await createLog('Compte supprimé', `ID: ${req.params.id}`, 'compte');
     res.json({ msg: 'User deleted' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-
-
-// POST /api/admin/signalement
 router.post('/signalement', async (req, res) => {
   try {
     const { targetName, targetType, raison, message } = req.body;
     await Warning.create({
-      title: `Signalement : ${raison}`,
-      user:  `${targetType} : ${targetName}`,
-      level: 'urgent',
+      title:   `Signalement : ${raison}`,
+      user:    `${targetType} : ${targetName}`,
+      level:   'urgent',
       treated: false,
     });
     res.json({ msg: 'Signalement envoyé' });
@@ -157,22 +129,15 @@ router.post('/signalement', async (req, res) => {
 // ── CHAUFFEURS ───────────────────────────────────────────────
 // ============================================================
 
-// GET /api/admin/chauffeurs
-// If your chauffeurs are stored in the User model with role='chauffeur':
 router.get('/chauffeurs', async (req, res) => {
   try {
-    // Option A — separate Chauffeur collection
-    // const chauffeurs = await Chauffeur.find().lean();
-
-    // Option B — users with role chauffeur (adjust to your schema)
     const chauffeurs = await User.find({ role: 'chauffeur' })
       .select('-password')
       .lean();
 
-    // Attach delivery stats
     const withStats = await Promise.all(chauffeurs.map(async (c) => {
-      const total   = await Commande.countDocuments({ chauffeur: c._id, status: 'livrée' });
       const now     = new Date();
+      const total   = await Commande.countDocuments({ chauffeur: c._id, status: 'livrée' });
       const monthly = await Commande.countDocuments({
         chauffeur: c._id,
         status: 'livrée',
@@ -181,8 +146,6 @@ router.get('/chauffeurs', async (req, res) => {
           $lt:  new Date(now.getFullYear(), now.getMonth() + 1, 1),
         },
       });
-
-      // Average rating from Avis
       const avis = await Avis.find({ chauffeur: c._id }).lean();
       const avg  = avis.length
         ? avis.reduce((s, a) => s + a.note, 0) / avis.length
@@ -202,10 +165,9 @@ router.get('/chauffeurs', async (req, res) => {
   }
 });
 
-// PUT /api/admin/chauffeurs/:id/status
 router.put('/chauffeurs/:id/status', async (req, res) => {
   try {
-    const { status } = req.body; // 'actif' | 'suspendu' | 'inactif'
+    const { status } = req.body;
     const chauffeur = await User.findByIdAndUpdate(
       req.params.id,
       { status },
@@ -219,10 +181,181 @@ router.put('/chauffeurs/:id/status', async (req, res) => {
 });
 
 // ============================================================
+// ── ABONNEMENTS ──────────────────────────────────────────────
+// ============================================================
+
+// GET /api/admin/abonnements
+// Lists all fournisseurs with a pending or active abonnement.
+// Useful for the admin to see who's waiting for confirmation.
+router.get('/abonnements', async (req, res) => {
+  try {
+    const fournisseurs = await User.find({
+      $or: [
+        { role: 'chauffeur' },
+        { secondaryRole: 'chauffeur' },
+      ],
+      'fournisseurInfo.abonnement': { $ne: null },
+    })
+      .select('-password')
+      .lean();
+
+    const mapped = fournisseurs.map(u => ({
+      _id:               u._id,
+      nom:               u.nom,
+      prenom:            u.prenom,
+      email:             u.email,
+      telephone:         u.telephone,
+      numeroPremit:      u.fournisseurInfo?.numeroPremit      ?? null,
+      abonnement:        u.fournisseurInfo?.abonnement        ?? null,
+      abonnementStatut:  u.fournisseurInfo?.abonnementStatut  ?? 'en_attente',
+      abonnementExpire:  u.fournisseurInfo?.abonnementExpire  ?? null,
+      refPaiement:       u.fournisseurInfo?.refPaiement       ?? null,
+    }));
+
+    res.json(mapped);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/admin/abonnements/:userId/confirmer
+// Admin confirms that the bank transfer was received.
+// Sets statut → 'actif' and computes expiry date from plan duration.
+//
+// Body: { planOverride?: 'mensuel' | 'trimestriel' | 'annuel' }
+//   planOverride is optional — if the admin wants to correct the plan
+//   (e.g. the user paid for "annuel" but selected "mensuel" by mistake).
+router.put('/abonnements/:userId/confirmer', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ msg: 'Utilisateur introuvable' });
+
+    const plan = req.body.planOverride || user.fournisseurInfo?.abonnement;
+    if (!plan) return res.status(400).json({ msg: 'Aucun plan abonnement trouvé' });
+
+    const days = PLAN_DURATIONS[plan];
+    if (!days) return res.status(400).json({ msg: `Plan inconnu: ${plan}` });
+
+    const now    = new Date();
+    const expiry = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+    user.fournisseurInfo              = user.fournisseurInfo || {};
+    user.fournisseurInfo.abonnement         = plan;
+    user.fournisseurInfo.abonnementStatut   = 'actif';
+    user.fournisseurInfo.abonnementExpire   = expiry;
+    user.fournisseurInfo.abonnementActiveLe = now;
+    user.markModified('fournisseurInfo');
+    await user.save();
+
+    await createLog(
+      'Abonnement confirmé',
+      `${user.nom} ${user.prenom} — plan: ${plan} — expire: ${expiry.toLocaleDateString('fr-DZ')}`,
+      'compte'
+    );
+
+    res.json({
+      msg:    'Abonnement activé avec succès',
+      statut: 'actif',
+      plan,
+      expiry,
+    });
+  } catch (e) {
+    console.error('[Abonnement confirmer]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/admin/abonnements/:userId/refuser
+// Admin rejects the payment (wrong ref, amount mismatch, etc.)
+// Sets statut → 'refuse' so the app can inform the fournisseur.
+router.put('/abonnements/:userId/refuser', async (req, res) => {
+  try {
+    const { raison } = req.body; // optional reason string
+
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ msg: 'Utilisateur introuvable' });
+
+    user.fournisseurInfo              = user.fournisseurInfo || {};
+    user.fournisseurInfo.abonnementStatut = 'refuse';
+    user.markModified('fournisseurInfo');
+    await user.save();
+
+    await createLog(
+      'Abonnement refusé',
+      `${user.nom} ${user.prenom}${raison ? ` — raison: ${raison}` : ''}`,
+      'compte'
+    );
+
+    res.json({ msg: 'Abonnement refusé', statut: 'refuse' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/admin/abonnements/:userId/expirer
+// Manually expire an abonnement (e.g. chargeback, fraud).
+router.put('/abonnements/:userId/expirer', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ msg: 'Utilisateur introuvable' });
+
+    user.fournisseurInfo              = user.fournisseurInfo || {};
+    user.fournisseurInfo.abonnementStatut  = 'expire';
+    user.fournisseurInfo.abonnementExpire  = new Date();
+    user.markModified('fournisseurInfo');
+    await user.save();
+
+    await createLog(
+      'Abonnement expiré manuellement',
+      `${user.nom} ${user.prenom}`,
+      'compte'
+    );
+
+    res.json({ msg: 'Abonnement expiré', statut: 'expire' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/abonnements/expiring-soon
+// Returns fournisseurs whose abonnement expires within the next N days.
+// Useful for sending reminders. Default: 7 days.
+router.get('/abonnements/expiring-soon', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days ?? '7', 10);
+    const now  = new Date();
+    const soon = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+    const users = await User.find({
+      'fournisseurInfo.abonnementStatut': 'actif',
+      'fournisseurInfo.abonnementExpire': { $gte: now, $lte: soon },
+    })
+      .select('nom prenom email telephone fournisseurInfo')
+      .lean();
+
+    const mapped = users.map(u => ({
+      _id:              u._id,
+      nom:              u.nom,
+      prenom:           u.prenom,
+      email:            u.email,
+      telephone:        u.telephone,
+      abonnement:       u.fournisseurInfo?.abonnement,
+      abonnementExpire: u.fournisseurInfo?.abonnementExpire,
+      joursRestants:    Math.ceil(
+        (new Date(u.fournisseurInfo.abonnementExpire) - now) / (1000 * 60 * 60 * 24)
+      ),
+    }));
+
+    res.json(mapped);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
 // ── RÉCLAMATIONS ─────────────────────────────────────────────
 // ============================================================
 
-// GET /api/admin/reclamations
 router.get('/reclamations', async (req, res) => {
   try {
     const claims = await Reclamation.find()
@@ -230,7 +363,6 @@ router.get('/reclamations', async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    // Flatten for Flutter
     const mapped = claims.map(r => ({
       ...r,
       clientNom: `${r.client?.prenom ?? ''} ${r.client?.nom ?? ''}`.trim(),
@@ -242,7 +374,6 @@ router.get('/reclamations', async (req, res) => {
   }
 });
 
-// PUT /api/admin/reclamations/:id
 router.put('/reclamations/:id', async (req, res) => {
   try {
     const { status } = req.body;
@@ -259,15 +390,14 @@ router.put('/reclamations/:id', async (req, res) => {
 });
 
 // ============================================================
-// ── AVIS (reviews) ───────────────────────────────────────────
+// ── AVIS ─────────────────────────────────────────────────────
 // ============================================================
 
-// GET /api/admin/avis
 router.get('/avis', async (req, res) => {
   try {
     const avis = await Avis.find()
-      .populate('client',   'nom prenom')
-      .populate('chauffeur','nom prenom')
+      .populate('client',    'nom prenom')
+      .populate('chauffeur', 'nom prenom')
       .sort({ createdAt: -1 })
       .lean();
     res.json(avis);
@@ -276,7 +406,6 @@ router.get('/avis', async (req, res) => {
   }
 });
 
-// PUT /api/admin/avis/:id  — hide/show a review
 router.put('/avis/:id', async (req, res) => {
   try {
     const { hidden } = req.body;
@@ -293,15 +422,14 @@ router.put('/avis/:id', async (req, res) => {
 });
 
 // ============================================================
-// ── LOGS (activity journal) ──────────────────────────────────
+// ── LOGS ─────────────────────────────────────────────────────
 // ============================================================
 
-// GET /api/admin/logs
 router.get('/logs', async (req, res) => {
   try {
     const logs = await Log.find()
       .sort({ createdAt: -1 })
-      .limit(200)          // cap to last 200 entries
+      .limit(200)
       .lean();
     res.json(logs);
   } catch (e) {
@@ -310,10 +438,9 @@ router.get('/logs', async (req, res) => {
 });
 
 // ============================================================
-// ── WARNINGS (avertissements) ────────────────────────────────
+// ── WARNINGS ─────────────────────────────────────────────────
 // ============================================================
 
-// GET /api/admin/warnings
 router.get('/warnings', async (req, res) => {
   try {
     const warnings = await Warning.find()
@@ -325,7 +452,6 @@ router.get('/warnings', async (req, res) => {
   }
 });
 
-// PUT /api/admin/warnings/:id/treat
 router.put('/warnings/:id/treat', async (req, res) => {
   try {
     const warning = await Warning.findByIdAndUpdate(
@@ -340,15 +466,16 @@ router.put('/warnings/:id/treat', async (req, res) => {
   }
 });
 
+// ============================================================
+// ── COMMANDES ────────────────────────────────────────────────
+// ============================================================
 
-
-// GET /api/admin/commandes — all commandes, no user filter
 router.get('/commandes', async (req, res) => {
   try {
     const commandes = await Commande.find()
-      .populate('client',    'nom prenom email')
-      .populate('chauffeur', 'nom prenom')
-      .populate('fournisseur', 'nom prenom')
+      .populate('client',     'nom prenom email')
+      .populate('chauffeur',  'nom prenom')
+      .populate('fournisseur','nom prenom')
       .sort({ createdAt: -1 })
       .lean();
     res.json(commandes);
@@ -384,90 +511,5 @@ router.put('/commandes/:commandeId/assign/:chauffeurId', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
 module.exports = router;
-
-
-// ============================================================
-// ── MODELS TO CREATE (if they don't exist yet) ───────────────
-// ============================================================
-//
-// models/Reclamation.js
-// ─────────────────────
-// const mongoose = require('mongoose');
-// const ReclamationSchema = new mongoose.Schema({
-//   client:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-//   commande:  { type: mongoose.Schema.Types.ObjectId, ref: 'Commande' },
-//   sujet:     { type: String, required: true },
-//   message:   { type: String },
-//   status:    { type: String, enum: ['ouverte','en traitement','résolue','fermée'], default: 'ouverte' },
-//   priorite:  { type: String, enum: ['haute','normale','basse'], default: 'normale' },
-// }, { timestamps: true });
-// module.exports = mongoose.model('Reclamation', ReclamationSchema);
-//
-// ─────────────────────
-// models/Avis.js
-// ─────────────────────
-// const mongoose = require('mongoose');
-// const AvisSchema = new mongoose.Schema({
-//   client:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-//   chauffeur:  { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-//   commande:   { type: mongoose.Schema.Types.ObjectId, ref: 'Commande' },
-//   note:       { type: Number, min: 1, max: 5, required: true },
-//   commentaire:{ type: String },
-//   hidden:     { type: Boolean, default: false },
-// }, { timestamps: true });
-// module.exports = mongoose.model('Avis', AvisSchema);
-//
-// ─────────────────────
-// models/Log.js
-// ─────────────────────
-// const mongoose = require('mongoose');
-// const LogSchema = new mongoose.Schema({
-//   action:  { type: String, required: true },
-//   detail:  { type: String },
-//   author:  { type: String, default: 'Système' },
-//   type:    { type: String, enum: ['commande','reclamation','compte','connexion','signalement','autre'] },
-// }, { timestamps: true });
-// module.exports = mongoose.model('Log', LogSchema);
-//
-// ─────────────────────
-// models/Warning.js
-// ─────────────────────
-// const mongoose = require('mongoose');
-// const WarningSchema = new mongoose.Schema({
-//   title:   { type: String, required: true },
-//   user:    { type: String },           // free text e.g. "Chauffeur : Rachid"
-//   level:   { type: String, enum: ['urgent','moyen','faible','info'], default: 'info' },
-//   treated: { type: Boolean, default: false },
-// }, { timestamps: true });
-// module.exports = mongoose.model('Warning', WarningSchema);
-//
-// ─────────────────────
-// HOW TO AUTO-LOG ACTIONS  (add this helper anywhere)
-// ─────────────────────
-// const Log = require('./models/Log');
-// async function createLog(action, detail, type, author = 'Admin') {
-//   await Log.create({ action, detail, type, author });
-// }
-// Then call it inside your existing routes, e.g.:
-//   await createLog('Commande créée', `#${commande._id} par ${client.nom}`, 'commande', 'Système');
-//   await createLog('Compte suspendu', `${user.nom}`, 'compte', 'Admin');
-//
-// ─────────────────────
-// HOW TO MOUNT IN server.js / app.js
-// ─────────────────────
-// const verifyAdmin = require('./middlewares/verifyAdmin');
-// const adminRoutes = require('./routes/admin');
-// app.use('/api/admin', verifyAdmin, adminRoutes);
-//
-// ─────────────────────
-// ADMIN USER SETUP (run once in MongoDB or via a seed script)
-// ─────────────────────
-// db.users.insertOne({
-//   nom: 'Admin',
-//   prenom: 'Waveau',
-//   email: 'admin@waveau.dz',
-//   password: '<bcrypt_hashed_password>',
-//   role: 'admin',
-//   status: 'actif'
-// })
