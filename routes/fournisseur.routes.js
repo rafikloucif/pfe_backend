@@ -201,6 +201,22 @@ router.put('/quantite-eau', auth, role("chauffeur"), async (req, res) => {
 });
 
 
+// ─── GET ONLINE CHAUFFEURS (client) ──────────────────────────────
+router.get('/online', auth, role("client"), async (req, res) => {
+  try {
+    const chauffeurs = await User.find({
+      role: "chauffeur",
+      isOnline: true,
+      'position.lat': { $ne: null },
+      'position.lon': { $ne: null },
+    }).select('nom prenom position isOnline noteMoyenne');
+
+    res.json(chauffeurs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 
 module.exports = router;
