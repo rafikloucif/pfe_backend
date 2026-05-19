@@ -85,7 +85,14 @@ router.get('/me', auth, role("chauffeur"), async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
     if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
-    res.json(user);
+
+    const Commande = require('../models/commande');
+    const totalLivraisons = await Commande.countDocuments({
+      chauffeur: req.user.id,
+      status: 'livrée',
+    });
+
+    res.json({ ...user.toObject(), totalLivraisons });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
