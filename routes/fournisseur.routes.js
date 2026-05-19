@@ -87,12 +87,26 @@ router.get('/me', auth, role("chauffeur"), async (req, res) => {
     if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
 
     const Commande = require('../models/commande');
+    const Avis = require('../models/Avis');
+
     const totalLivraisons = await Commande.countDocuments({
       chauffeur: req.user.id,
       status: 'livrée',
     });
 
-    res.json({ ...user.toObject(), totalLivraisons });
+    // ── Compute real rating from client reviews ──
+    const reviews = await Avis.find({
+      chauffeur:    req.user.id,
+      reviewerRole: 'client',
+    });
+    const noteMoyenne = reviews.length > 0
+      ? Math.round((reviews.reduce((sum, r) => sum + r.note, 0) / reviews.length) * 10) / 10
+      : 0;
+
+    // ── Also update the stored value ──
+    await User.findByIdAndUpdate(req.user.id, { noteMoyenne });
+
+    res.json({ ...user.toObject(), totalLivraisons, noteMoyenne });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
