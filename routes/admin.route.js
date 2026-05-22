@@ -131,7 +131,12 @@ router.post('/signalement', async (req, res) => {
 
 router.get('/chauffeurs', async (req, res) => {
   try {
-    const chauffeurs = await User.find({ role: 'chauffeur' })
+    const chauffeurs = await User.find({
+      $or: [
+        { role: 'chauffeur' },
+        { secondaryRole: 'chauffeur' }  // ← add this
+      ]
+    })
       .select('-password')
       .lean();
 
@@ -150,7 +155,6 @@ router.get('/chauffeurs', async (req, res) => {
       const avg  = avis.length
         ? avis.reduce((s, a) => s + a.note, 0) / avis.length
         : 0;
-
       return {
         ...c,
         totalLivraisons: total,
@@ -164,22 +168,6 @@ router.get('/chauffeurs', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-
-router.put('/chauffeurs/:id/status', async (req, res) => {
-  try {
-    const { status } = req.body;
-    const chauffeur = await User.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    ).select('-password');
-    if (!chauffeur) return res.status(404).json({ msg: 'Chauffeur not found' });
-    res.json(chauffeur);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 // ============================================================
 // ── ABONNEMENTS ──────────────────────────────────────────────
 // ============================================================
